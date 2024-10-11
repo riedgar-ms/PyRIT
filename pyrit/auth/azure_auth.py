@@ -128,8 +128,7 @@ def get_token_provider_from_default_azure_credential(scope: str = AZURE_COGNITIV
     """
     try:
         mic = ManagedIdentityCredential(client_id="205cb331-87f7-4e09-a6dd-70715dec87ec")
-        print(f"Created {mic=}")
-        print(f"{mic.settings=}")
+        print(f"\nCreated {mic=}\n")
         token_provider = get_bearer_token_provider(mic, scope)
         return token_provider
     except Exception as e:
