@@ -127,7 +127,10 @@ def get_token_provider_from_default_azure_credential(scope: str = AZURE_COGNITIV
         Authentication token provider
     """
     try:
-        token_provider = get_bearer_token_provider(ManagedIdentityCredential(client_id="205cb331-87f7-4e09-a6dd-70715dec87ec"), scope)
+        mic = ManagedIdentityCredential(client_id="205cb331-87f7-4e09-a6dd-70715dec87ec")
+        print(f"Created {mic=}")
+        print(f"{mic.settings=}")
+        token_provider = get_bearer_token_provider(mic, scope)
         return token_provider
     except Exception as e:
         logger.error(f"Failed to obtain token for '{scope}': {e}")
