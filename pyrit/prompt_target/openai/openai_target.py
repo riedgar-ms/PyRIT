@@ -4,11 +4,17 @@
 import json
 import logging
 from abc import abstractmethod
-from typing import Optional
+from typing import Optional, Union
 
+from azure.identity import (
+    DefaultAzureCredential,
+    ManagedIdentityCredential,
+    SharedTokenCacheCredential,
+    AzurePowerShellCredential,
+)
 from openai import AsyncAzureOpenAI, AsyncOpenAI
 
-from pyrit.auth.azure_auth import get_token_provider_from_default_azure_credential
+from pyrit.auth.azure_auth import get_token_provider_from_default_azure_credential, get_token_provider_from_credential
 from pyrit.common import default_values
 from pyrit.prompt_target import PromptChatTarget
 
@@ -31,7 +37,13 @@ class OpenAITarget(PromptChatTarget):
         api_key: str = None,
         headers: str = None,
         is_azure_target=True,
-        use_aad_auth: bool = False,
+        use_aad_auth: Union[
+            bool,
+            DefaultAzureCredential,
+            ManagedIdentityCredential,
+            SharedTokenCacheCredential,
+            AzurePowerShellCredential,
+        ] = False,
         api_version: str = "2024-06-01",
         max_requests_per_minute: Optional[int] = None,
     ) -> None:
@@ -51,9 +63,10 @@ class OpenAITarget(PromptChatTarget):
                 Defaults to the AZURE_OPENAI_CHAT_KEY environment variable.
             headers (str, Optional): Headers of the endpoint (JSON).
             is_azure_target (bool, Optional): Whether the target is an Azure target.
-            use_aad_auth (bool, Optional): When set to True, user authentication is used
-                instead of API Key. DefaultAzureCredential is taken for
-                https://cognitiveservices.azure.com/.default . Please run `az login` locally
+            use_aad_auth (bool or e.g. DefaultAzureCredential): When set to True, or a suitable
+                Azure credential object, user authentication is used
+                instead of API Key. DefaultAzureCredential is used when set to True.
+                Scope will be https://cognitiveservices.azure.com/.default . Please run `az login` locally
                 to leverage user AuthN.
             api_version (str, Optional): The version of the Azure OpenAI API. Defaults to
                 "2024-06-01".
@@ -84,7 +97,19 @@ class OpenAITarget(PromptChatTarget):
                 # OpenAI deployments listed here: https://platform.openai.com/docs/models
                 raise ValueError("The deployment name must be provided for non-Azure OpenAI targets. e.g. gpt-4o")
 
-    def _initialize_azure_vars(self, deployment_name: str, endpoint: str, api_key: str, use_aad_auth: bool):
+    def _initialize_azure_vars(
+        self,
+        deployment_name: str,
+        endpoint: str,
+        api_key: str,
+        use_aad_auth: Union[
+            bool,
+            DefaultAzureCredential,
+            ManagedIdentityCredential,
+            SharedTokenCacheCredential,
+            AzurePowerShellCredential,
+        ],
+    ):
         self._set_azure_openai_env_configuration_vars()
 
         self._deployment_name = default_values.get_required_value(
@@ -94,23 +119,33 @@ class OpenAITarget(PromptChatTarget):
             env_var_name=self.endpoint_uri_environment_variable, passed_value=endpoint
         ).rstrip("/")
 
-        if use_aad_auth:
-            logger.info("Authenticating with DefaultAzureCredential() for Azure Cognitive Services")
-            token_provider = get_token_provider_from_default_azure_credential()
+        if isinstance(use_aad_auth, bool):
+            if use_aad_auth:
+                logger.info("Authenticating with DefaultAzureCredential() for Azure Cognitive Services")
+                token_provider = get_token_provider_from_default_azure_credential()
 
+                self._async_client = AsyncAzureOpenAI(
+                    azure_ad_token_provider=token_provider,
+                    api_version=self._api_version,
+                    azure_endpoint=self._endpoint,
+                    default_headers=self._extra_headers,
+                )
+            else:
+                self._api_key = default_values.get_required_value(
+                    env_var_name=self.api_key_environment_variable, passed_value=api_key
+                )
+
+                self._async_client = AsyncAzureOpenAI(
+                    api_key=self._api_key,
+                    api_version=self._api_version,
+                    azure_endpoint=self._endpoint,
+                    default_headers=self._extra_headers,
+                )
+        else:
+            logger.info("Using supplied credential object for Azure Cognitive Serivces")
+            token_provider = get_token_provider_from_credential(use_aad_auth)
             self._async_client = AsyncAzureOpenAI(
                 azure_ad_token_provider=token_provider,
-                api_version=self._api_version,
-                azure_endpoint=self._endpoint,
-                default_headers=self._extra_headers,
-            )
-        else:
-            self._api_key = default_values.get_required_value(
-                env_var_name=self.api_key_environment_variable, passed_value=api_key
-            )
-
-            self._async_client = AsyncAzureOpenAI(
-                api_key=self._api_key,
                 api_version=self._api_version,
                 azure_endpoint=self._endpoint,
                 default_headers=self._extra_headers,

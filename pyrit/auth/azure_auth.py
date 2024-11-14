@@ -120,15 +120,19 @@ def get_access_token_from_interactive_login(scope: str = AZURE_COGNITIVE_SERVICE
         raise
 
 
+def get_token_provider_from_credential(credential, scope: str = AZURE_COGNITIVE_SERVICES_DEFAULT_SCOPE):
+    try:
+        token_provider = get_bearer_token_provider(credential, scope)
+        return token_provider
+    except Exception as e:
+        logger.error(f"Failed to obtain token for '{scope}': {e}")
+        raise
+
+
 def get_token_provider_from_default_azure_credential(scope: str = AZURE_COGNITIVE_SERVICES_DEFAULT_SCOPE):
     """Connect to an AOAI endpoint via default Azure credential.
 
     Returns:
         Authentication token provider
     """
-    try:
-        token_provider = get_bearer_token_provider(DefaultAzureCredential(), scope)
-        return token_provider
-    except Exception as e:
-        logger.error(f"Failed to obtain token for '{scope}': {e}")
-        raise
+    return get_token_provider_from_credential(DefaultAzureCredential(), scope=scope)
