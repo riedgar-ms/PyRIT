@@ -615,6 +615,8 @@ class Scorer(Identifiable[ScorerIdentifier], abc.ABC):
         response_json: str = ""
         try:
             response_json = response[0].get_value()
+            if len(response) > 1:
+                pass
 
             response_json = remove_markdown_json(response_json)
             parsed_response = json.loads(response_json)

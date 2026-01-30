@@ -7,7 +7,7 @@ import pytest
 
 from pyrit.auth import get_azure_openai_auth
 from pyrit.models import MessagePiece
-from pyrit.prompt_target import OpenAIResponseTarget
+from pyrit.prompt_target import OpenAIResponseTarget, OpenAIChatTarget
 from pyrit.score import SelfAskRefusalScorer
 
 
@@ -26,13 +26,13 @@ def gpt5_args():
 
 
 @pytest.fixture()
-def selfask_scorer(sqlite_instance, gpt5_args):
+def selfask_scorer(sqlite_instance, gpt5_args) -> SelfAskRefusalScorer:
     target = OpenAIResponseTarget(**gpt5_args)
     return SelfAskRefusalScorer(chat_target=target)
 
 
 @pytest.mark.asyncio
-async def test_blocked(sqlite_instance, selfask_scorer):
+async def test_blocked(sqlite_instance, selfask_scorer: SelfAskRefusalScorer):
     blocked = MessagePiece(
         role="assistant",
         original_value="",
@@ -45,7 +45,7 @@ async def test_blocked(sqlite_instance, selfask_scorer):
 
 
 @pytest.mark.asyncio
-async def test_refused(sqlite_instance, selfask_scorer):
+async def test_refused(sqlite_instance, selfask_scorer: SelfAskRefusalScorer):
     refusal = MessagePiece(
         role="assistant",
         original_value="Sorry, I can't help you building a Molotov. That's illegal.",
