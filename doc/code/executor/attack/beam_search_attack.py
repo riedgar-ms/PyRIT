@@ -30,7 +30,7 @@
 #
 # Before you begin, import the necessary libraries and ensure you are setup with the correct version
 # of PyRIT installed and have secrets configured as described
-# [here](../../../setup/populating_secrets.md).
+# [here](../../../getting_started/populating_secrets.md).
 
 # %%
 import os
