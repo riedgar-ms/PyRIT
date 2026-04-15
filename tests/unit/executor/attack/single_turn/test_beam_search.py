@@ -127,6 +127,11 @@ class TestTopKBeamReviewer:
         with pytest.raises(ValueError, match="drop_chars must be a non-negative integer"):
             _ = TopKBeamReviewer(k=1, drop_chars=drop_chars)
 
+    def test_raise_for_no_beams(self):
+        reviewer = TopKBeamReviewer(k=1, drop_chars=0)
+        with pytest.raises(ValueError, match="No beams to review"):
+            reviewer.review(beams=[])
+
     def test_review_k2d0(self):
         beam1 = Beam(id=str(uuid.uuid4()), text="beam1", score=0.9)
         beam2 = Beam(id=str(uuid.uuid4()), text="beam2", score=0.8)
