@@ -724,6 +724,37 @@ def test_set_openai_env_configuration_vars_sets_vars():
     assert target.api_key_environment_variable == "OPENAI_RESPONSES_KEY"
 
 
+def test_fresh_instance_creates_new_target_with_overrides_and_copied_config(patch_central_database):
+    extra_body_parameters = {
+        "metadata": {"source": "original"},
+        "tools": [{"type": "custom", "format": {"type": "grammar"}, "name": "old_grammar"}],
+    }
+    target = OpenAIResponseTarget(
+        model_name="gpt-5",
+        endpoint="https://mock.azure.com/",
+        api_key="mock-api-key",
+        extra_body_parameters=extra_body_parameters,
+    )
+
+    override_body_parameters = {"metadata": {"source": "fresh"}}
+    fresh_target = target.fresh_instance(
+        extra_body_parameters=override_body_parameters,
+        grammar_name="new_grammar",
+    )
+
+    assert fresh_target is not target
+    assert isinstance(fresh_target, OpenAIResponseTarget)
+    assert fresh_target._extra_body_parameters == {"metadata": {"source": "fresh"}}
+    assert fresh_target._grammar_name == "new_grammar"
+
+    # Verify mutable state was copied, not shared.
+    override_body_parameters["metadata"]["source"] = "mutated"
+    assert fresh_target._extra_body_parameters["metadata"]["source"] == "fresh"
+
+    target._extra_body_parameters["metadata"]["source"] = "changed-on-original"
+    assert fresh_target._extra_body_parameters["metadata"]["source"] == "fresh"
+
+
 @pytest.mark.asyncio
 async def test_build_input_for_multi_modal_async_filters_reasoning(target: OpenAIResponseTarget):
     # Prepare a conversation with a reasoning piece and a text piece
