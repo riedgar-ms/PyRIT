@@ -150,12 +150,12 @@ class BeamSearchAttack(SingleTurnAttackStrategy):
     def __init__(
         self,
         *,
-        objective_target: OpenAIResponseTarget = REQUIRED_VALUE,  # type: ignore[assignment]
-        beam_reviewer: BeamReviewer = REQUIRED_VALUE,  # type: ignore[assignment]
+        objective_target: OpenAIResponseTarget = REQUIRED_VALUE,  # type: ignore[ty:invalid-parameter-default]
+        beam_reviewer: BeamReviewer = REQUIRED_VALUE,  # type: ignore[ty:invalid-parameter-default]
         attack_converter_config: Optional[AttackConverterConfig] = None,
         attack_scoring_config: Optional[AttackScoringConfig] = None,
         prompt_normalizer: Optional[PromptNormalizer] = None,
-        params_type: type[AttackParamsT] = AttackParameters,  # type: ignore[assignment]
+        params_type: type[AttackParamsT] = AttackParameters,  # type: ignore[ty:invalid-parameter-default]
         prepended_conversation_config: Optional[PrependedConversationConfig] = None,
         num_beams: int = 2,
         max_iterations: int = 4,
