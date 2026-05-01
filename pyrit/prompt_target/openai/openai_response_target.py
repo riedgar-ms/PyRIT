@@ -201,7 +201,7 @@ class OpenAIResponseTarget(OpenAITarget, PromptChatTarget):
             else:
                 kwargs_copy[k] = deepcopy(v)
 
-        self._init_args = {
+        self._init_args: dict[str, Any] = {
             "custom_functions": deepcopy(custom_functions),
             "max_output_tokens": max_output_tokens,
             "temperature": temperature,
@@ -210,6 +210,8 @@ class OpenAIResponseTarget(OpenAITarget, PromptChatTarget):
             "fail_on_missing_function": fail_on_missing_function,
             "reasoning_effort": reasoning_effort,
             "reasoning_summary": reasoning_summary,
+            "custom_configuration": deepcopy(custom_configuration),
+            "custom_capabilities": deepcopy(custom_capabilities),
             **kwargs_copy,
         }
 
