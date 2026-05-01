@@ -35,7 +35,7 @@ class SeedPrompt(Seed):
 
     # The type of data this prompt represents (e.g., text, image_path, audio_path, video_path)
     # This field shadows the base class property to allow per-prompt data types
-    data_type: Optional[PromptDataType] = None  # type: ignore[assignment]
+    data_type: Optional[PromptDataType] = None
 
     # Optional JSON schema for constraining the response
     # Not actually dict[str,str], necessarily, but a full JSON object.
