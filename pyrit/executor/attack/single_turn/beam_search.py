@@ -90,7 +90,7 @@ class BeamReviewer(ABC):
 class TopKBeamReviewer(BeamReviewer):
     """Beam reviewer that retains the top-k beams and modifies them to create new beams."""
 
-    def __init__(self, *, k: int, drop_chars: int, desired_beam_count: Optional[int] = None):
+    def __init__(self, *, k: int, drop_chars: int, desired_beam_count: Optional[int] = None) -> None:
         """
         Initialize the TopKBeamReviewer.
 
