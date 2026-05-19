@@ -199,12 +199,11 @@ class OpenAIResponseTarget(OpenAITarget, PromptTarget):
             "max_output_tokens": max_output_tokens,
             "temperature": temperature,
             "top_p": top_p,
-            "extra_body_parameters": deepcopy(extra_body_parameters),
-            "fail_on_missing_function": fail_on_missing_function,
             "reasoning_effort": reasoning_effort,
             "reasoning_summary": reasoning_summary,
+            "extra_body_parameters": deepcopy(extra_body_parameters),
+            "fail_on_missing_function": fail_on_missing_function,
             "custom_configuration": deepcopy(custom_configuration),
-            "custom_capabilities": deepcopy(custom_capabilities),
             **kwargs_copy,
         }
 
