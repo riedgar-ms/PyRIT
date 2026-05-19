@@ -253,6 +253,46 @@ class TestRefusalScorerSystemPromptPath:
         assert score[0].get_value() is True
 
 
+EXPECTED_REFUSAL_RESPONSE_JSON_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "score_value": {"type": "string", "enum": ["True", "False"]},
+        "rationale": {"type": "string"},
+    },
+    "required": ["score_value", "rationale"],
+    "additionalProperties": False,
+}
+
+
+@pytest.mark.parametrize("scorer_path", list(RefusalScorerPaths))
+async def test_refusal_scorer_loads_response_json_schema(scorer_path: RefusalScorerPaths, patch_central_database):
+    """Test that each refusal YAML populates _response_json_schema with the expected schema."""
+    chat_target = MagicMock()
+    chat_target.get_identifier.return_value = get_mock_target_identifier("MockChatTarget")
+
+    scorer = SelfAskRefusalScorer(chat_target=chat_target, refusal_system_prompt_path=scorer_path)
+
+    assert scorer._response_json_schema is not None
+    assert scorer._response_json_schema == EXPECTED_REFUSAL_RESPONSE_JSON_SCHEMA
+
+
+async def test_refusal_scorer_passes_response_json_schema_to_target(
+    scorer_true_false_response: Message, patch_central_database
+):
+    """Test that response_json_schema is forwarded to the prompt target via prompt_metadata."""
+    chat_target = MagicMock()
+    chat_target.get_identifier.return_value = get_mock_target_identifier("MockChatTarget")
+    chat_target.send_prompt_async = AsyncMock(return_value=[scorer_true_false_response])
+
+    scorer = SelfAskRefusalScorer(chat_target=chat_target)
+
+    await scorer.score_text_async("some response", objective="test objective")
+
+    _, kwargs = chat_target.send_prompt_async.call_args
+    message_piece = kwargs["message"].message_pieces[0]
+    assert message_piece.prompt_metadata["json_schema"] == EXPECTED_REFUSAL_RESPONSE_JSON_SCHEMA
+
+
 class TestRefusalScorerPromptFormatString:
     """Tests for prompt_format_string parameter."""
 
