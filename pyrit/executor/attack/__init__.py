@@ -39,6 +39,9 @@ from pyrit.executor.attack.multi_turn import (
     generate_simulated_conversation_async,
 )
 from pyrit.executor.attack.single_turn import (
+    Beam,
+    BeamReviewer,
+    BeamSearchAttack,
     ContextComplianceAttack,
     FlipAttack,
     ManyShotJailbreakAttack,
@@ -48,6 +51,7 @@ from pyrit.executor.attack.single_turn import (
     SingleTurnAttackContext,
     SingleTurnAttackStrategy,
     SkeletonKeyAttack,
+    TopKBeamReviewer,
 )
 
 # Backward-compatibility aliases — import from pyrit.output.attack_result directly.
@@ -81,6 +85,10 @@ __all__ = [
     "RolePlayAttack",
     "RolePlayPaths",
     "SkeletonKeyAttack",
+    "Beam",
+    "BeamReviewer",
+    "BeamSearchAttack",
+    "TopKBeamReviewer",
     "ConversationSession",
     "MultiTurnAttackStrategy",
     "MultiTurnAttackContext",
