@@ -684,6 +684,14 @@ class MemoryInterface(abc.ABC):
     def add_scores_to_memory(self, *, scores: Sequence[Score]) -> None:
         """
         Insert a list of scores into the memory storage.
+
+        Callers that produce scores for pieces flagged via
+        ``MessagePiece.not_in_memory = True`` should null out
+        ``message_piece_id`` on those scores before calling this method so the
+        score itself can still be persisted without a dangling piece linkage.
+        Persisting the score even without a piece is intentional: aggregate
+        analytics (e.g. refusal rate over a batch) still want the score row
+        even when the scored content was never a real conversation turn.
         """
         for score in scores:
             if score.message_piece_id:
@@ -694,7 +702,7 @@ class MemoryInterface(abc.ABC):
                     continue
                 # auto-link score to the original prompt id if the prompt is a duplicate
                 if pieces[0].original_prompt_id != pieces[0].id:
-                    score.message_piece_id = pieces[0].original_prompt_id
+                    score.message_piece_id = pieces[0].original_prompt_id  # type: ignore[ty:invalid-assignment]
         self._insert_entries(entries=[ScoreEntry(entry=score) for score in scores])
 
     def get_scores(
