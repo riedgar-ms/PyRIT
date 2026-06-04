@@ -11,6 +11,7 @@ from typing import (
     Literal,
     Optional,
     cast,
+    override,
 )
 
 from openai.types.shared import ReasoningEffort
@@ -234,6 +235,7 @@ class OpenAIResponseTarget(OpenAITarget):
             result._grammar_name = grammar_name
         return result
 
+    @override
     def _build_identifier(self) -> ComponentIdentifier:
         """
         Build the identifier with OpenAI response-specific parameters.
@@ -252,15 +254,18 @@ class OpenAIResponseTarget(OpenAITarget):
             },
         )
 
+    @override
     def _set_openai_env_configuration_vars(self) -> None:
         self.model_name_environment_variable = "OPENAI_RESPONSES_MODEL"
         self.endpoint_environment_variable = "OPENAI_RESPONSES_ENDPOINT"
         self.api_key_environment_variable = "OPENAI_RESPONSES_KEY"
 
+    @override
     def _get_target_api_paths(self) -> list[str]:
         """Return API paths that should not be in the URL."""
         return ["/responses", "/v1/responses"]
 
+    @override
     def _get_provider_examples(self) -> dict[str, str]:
         """Return provider-specific example URLs."""
         return {
@@ -480,6 +485,7 @@ class OpenAIResponseTarget(OpenAITarget):
         logger.info("Using json_object format without schema - consider providing a schema for better results")
         return {"format": {"type": "json_object"}}
 
+    @override
     def _check_content_filter(self, response: Any) -> bool:
         """
         Check if a Response API response has a content filter error.
@@ -509,6 +515,7 @@ class OpenAIResponseTarget(OpenAITarget):
 
         return False
 
+    @override
     def _extract_partial_content(self, response: Any) -> Optional[str]:
         """
         Extract partial content from a Response API response that was content-filtered.
@@ -543,6 +550,7 @@ class OpenAIResponseTarget(OpenAITarget):
         except (AttributeError, IndexError, TypeError):
             return None
 
+    @override
     def _validate_response(self, response: Any, request: MessagePiece) -> Optional[Message]:
         """
         Validate a Response API response for errors.
@@ -579,6 +587,7 @@ class OpenAIResponseTarget(OpenAITarget):
 
         return None
 
+    @override
     async def _construct_message_from_response_async(self, response: Any, request: MessagePiece) -> Message:
         """
         Construct a Message from a Response API response.
