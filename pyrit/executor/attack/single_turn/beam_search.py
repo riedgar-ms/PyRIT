@@ -7,7 +7,7 @@ import logging
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Optional, override
 
 from pyrit.common.apply_defaults import REQUIRED_VALUE, apply_defaults
 from pyrit.common.utils import warn_if_set
@@ -112,6 +112,7 @@ class TopKBeamReviewer(BeamReviewer):
         self.drop_chars = drop_chars
         self.desired_beam_count = desired_beam_count
 
+    @override
     def review(self, *, beams: list[Beam]) -> list[Beam]:
         """
         Review the beams to retain the top-k and create new beams by modifying them.
@@ -241,6 +242,7 @@ class BeamSearchAttack(SingleTurnAttackStrategy):
         self._prepended_conversation_config = prepended_conversation_config
         self._start_context: Optional[SingleTurnAttackContext[Any]] = None
 
+    @override
     def _validate_context(self, *, context: SingleTurnAttackContext[Any]) -> None:
         """
         Validate the context before executing the attack.
@@ -254,6 +256,7 @@ class BeamSearchAttack(SingleTurnAttackStrategy):
         if not context.objective or context.objective.isspace():
             raise ValueError("Attack objective must be provided and non-empty in the context")
 
+    @override
     async def _setup_async(self, *, context: SingleTurnAttackContext[Any]) -> None:
         """
         Set up the attack by preparing conversation context.
@@ -276,6 +279,7 @@ class BeamSearchAttack(SingleTurnAttackStrategy):
             memory_labels=self._memory_labels,
         )
 
+    @override
     async def _perform_async(self, *, context: SingleTurnAttackContext[Any]) -> AttackResult:
         """
         Perform the beam search attack.
@@ -507,6 +511,7 @@ class BeamSearchAttack(SingleTurnAttackStrategy):
         # No response at all (all attempts filtered/failed)
         return AttackOutcome.FAILURE, "All attempts were filtered or failed to get a response"
 
+    @override
     async def _teardown_async(self, *, context: SingleTurnAttackContext[Any]) -> None:
         """Clean up after attack execution."""
         # Nothing to be done here, no-op
