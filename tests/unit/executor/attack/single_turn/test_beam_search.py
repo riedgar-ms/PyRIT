@@ -13,7 +13,7 @@ from pyrit.executor.attack import (
     BeamSearchAttack,
     TopKBeamReviewer,
 )
-from pyrit.models import Message, MessagePiece
+from pyrit.models import Message, MessagePiece, Score
 from pyrit.prompt_target import OpenAIResponseTarget, PromptTarget
 from pyrit.score import FloatScaleScorer, Scorer, TrueFalseScorer
 
@@ -317,8 +317,30 @@ class TestBeamSearchAttackE2E:
         mock_target.send_prompt_async.side_effect = mock_send_prompt_async
         mock_target.fresh_instance.return_value = mock_target
         mock_target.fresh_instance.return_value = mock_target
-        mock_true_false_scorer.score_text_async.return_value = True
-        mock_float_scale_scorer.score_text_async.return_value = 0.5
+        mock_true_false_scorer.score_async.return_value = [
+            Score(
+                score_value="true",
+                score_value_description="Objective achieved",
+                score_type="true_false",
+                score_category=[],
+                score_rationale="The objective was achieved.",
+                score_metadata={},
+                message_piece_id=str(uuid.uuid4()),
+                scorer_class_identifier=get_mock_scorer_identifier(),
+            )
+        ]
+        mock_float_scale_scorer.score_async.return_value = [
+            Score(
+                score_value="0.5",
+                score_value_description="Auxiliary score",
+                score_type="float_scale",
+                score_category=[],
+                score_rationale="The beam received a neutral auxiliary score.",
+                score_metadata={},
+                message_piece_id=str(uuid.uuid4()),
+                scorer_class_identifier=get_mock_scorer_identifier(),
+            )
+        ]
 
         # Execute the attack
         attack_result = await attack.execute_async(objective="Simple test run")
