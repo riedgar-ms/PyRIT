@@ -1348,7 +1348,7 @@ class TestTrueFalseScorerEmptyScoreListRationale:
         """Create a TrueFalseScorer where _score_piece_async returns empty list."""
 
         class TestTrueFalseScorer(TrueFalseScorer):
-            def __init__(self, validator):
+            def __init__(self, *, validator):
                 super().__init__(validator=validator)
 
             def _build_identifier(self) -> ComponentIdentifier:
@@ -1475,7 +1475,7 @@ class TestFloatScaleScorerEmptyScoreListRationale:
         from pyrit.score.float_scale.float_scale_scorer import FloatScaleScorer
 
         class _TestFloatScaleScorer(FloatScaleScorer):
-            def __init__(self, validator):
+            def __init__(self, *, validator):
                 super().__init__(validator=validator)
 
             def _build_identifier(self) -> ComponentIdentifier:
