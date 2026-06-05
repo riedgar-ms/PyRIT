@@ -5,7 +5,6 @@ import asyncio
 import contextlib
 import logging
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 
@@ -43,7 +42,7 @@ class AddImageVideoConverter(PromptConverter):
     def __init__(
         self,
         video_path: str,
-        output_path: Optional[str] = None,
+        output_path: str | None = None,
         img_position: tuple[int, int] = (10, 10),
         img_resize_size: tuple[int, int] = (500, 500),
     ) -> None:
@@ -151,9 +150,9 @@ class AddImageVideoConverter(PromptConverter):
         import cv2
 
         video_path = self._video_path
-        local_temp_path: Optional[Path] = None
-        cap: Optional[cv2.VideoCapture] = None
-        output_video: Optional[cv2.VideoWriter] = None
+        local_temp_path: Path | None = None
+        cap: cv2.VideoCapture | None = None
+        output_video: cv2.VideoWriter | None = None
 
         try:
             if azure_storage_flag:

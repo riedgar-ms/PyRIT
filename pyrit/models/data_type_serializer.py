@@ -12,7 +12,7 @@ import time
 import wave
 from mimetypes import guess_type
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, Optional, Union, get_args
+from typing import TYPE_CHECKING, Literal, get_args
 from urllib.parse import urlparse
 
 import aiofiles
@@ -48,8 +48,8 @@ def _write_wav_sync(
 def data_serializer_factory(
     *,
     data_type: PromptDataType,
-    value: Optional[str] = None,
-    extension: Optional[str] = None,
+    value: str | None = None,
+    extension: str | None = None,
     category: AllowedCategories,
 ) -> DataTypeSerializer:
     """
@@ -58,7 +58,7 @@ def data_serializer_factory(
     Args:
         data_type (str): The type of the data (e.g., 'text', 'image_path', 'audio_path').
         value (str): The data value to be serialized.
-        extension (Optional[str]): The file extension, if applicable.
+        extension (str | None): The file extension, if applicable.
         category (AllowedCategories): The category or context for the data (e.g., 'seed-prompt-entries').
 
     Returns:
@@ -114,7 +114,7 @@ class DataTypeSerializer(abc.ABC):
     data_sub_directory: str
     file_extension: str
 
-    _file_path: Union[Path, str] | None = None
+    _file_path: Path | str | None = None
 
     @property
     def _memory(self) -> MemoryInterface:
@@ -152,7 +152,7 @@ class DataTypeSerializer(abc.ABC):
 
         """
 
-    async def save_data_async(self, data: bytes, output_filename: Optional[str] = None) -> None:
+    async def save_data_async(self, data: bytes, output_filename: str | None = None) -> None:
         """
         Save data to storage.
 
@@ -193,7 +193,7 @@ class DataTypeSerializer(abc.ABC):
         num_channels: int = 1,
         sample_width: int = 2,
         sample_rate: int = 16000,
-        output_filename: Optional[str] = None,
+        output_filename: str | None = None,
     ) -> None:
         """
         Save PCM16 or similarly formatted audio data to storage.
@@ -312,15 +312,15 @@ class DataTypeSerializer(abc.ABC):
         hash_object = hashlib.sha256(input_bytes)
         return hash_object.hexdigest()
 
-    async def get_data_filename_async(self, file_name: Optional[str] = None) -> Union[Path, str]:
+    async def get_data_filename_async(self, file_name: str | None = None) -> Path | str:
         """
         Generate or retrieve a unique filename for the data file.
 
         Args:
-            file_name (Optional[str]): Optional file name override.
+            file_name (str | None): Optional file name override.
 
         Returns:
-            Union[Path, str]: Full storage path for the generated data file.
+            Path | str: Full storage path for the generated data file.
 
         Raises:
             TypeError: If the serializer is not configured for on-disk data.
@@ -358,7 +358,7 @@ class DataTypeSerializer(abc.ABC):
         return self._file_path
 
     async def save_data(  # pyrit-async-suffix-exempt
-        self, data: bytes, output_filename: Optional[str] = None
+        self, data: bytes, output_filename: str | None = None
     ) -> None:
         """
         Save data to storage (deprecated alias of ``save_data_async``).
@@ -397,7 +397,7 @@ class DataTypeSerializer(abc.ABC):
         num_channels: int = 1,
         sample_width: int = 2,
         sample_rate: int = 16000,
-        output_filename: Optional[str] = None,
+        output_filename: str | None = None,
     ) -> None:
         """
         Save formatted audio data to storage (deprecated alias of ``save_formatted_audio_async``).
@@ -459,8 +459,8 @@ class DataTypeSerializer(abc.ABC):
         return await self.get_sha256_async()
 
     async def get_data_filename(  # pyrit-async-suffix-exempt
-        self, file_name: Optional[str] = None
-    ) -> Union[Path, str]:
+        self, file_name: str | None = None
+    ) -> Path | str:
         """
         Generate or retrieve a unique filename for the data file (deprecated alias of ``get_data_filename_async``).
 
@@ -468,7 +468,7 @@ class DataTypeSerializer(abc.ABC):
             file_name: Optional file name override.
 
         Returns:
-            Union[Path, str]: Full storage path for the generated data file.
+            Path | str: Full storage path for the generated data file.
         """
         print_deprecation_message(
             old_item="pyrit.models.data_type_serializer.DataTypeSerializer.get_data_filename",
@@ -576,14 +576,14 @@ class ErrorDataTypeSerializer(DataTypeSerializer):
 class URLDataTypeSerializer(DataTypeSerializer):
     """Serializer for URL values and URL-backed local file references."""
 
-    def __init__(self, *, category: str, prompt_text: str, extension: Optional[str] = None) -> None:
+    def __init__(self, *, category: str, prompt_text: str, extension: str | None = None) -> None:
         """
         Initialize a URL serializer.
 
         Args:
             category (str): Data category folder name.
             prompt_text (str): URL or path value.
-            extension (Optional[str]): Optional extension for persisted content.
+            extension (str | None): Optional extension for persisted content.
 
         """
         self.data_type = "url"
@@ -606,14 +606,14 @@ class URLDataTypeSerializer(DataTypeSerializer):
 class ImagePathDataTypeSerializer(DataTypeSerializer):
     """Serializer for image path values stored on disk."""
 
-    def __init__(self, *, category: str, prompt_text: Optional[str] = None, extension: Optional[str] = None) -> None:
+    def __init__(self, *, category: str, prompt_text: str | None = None, extension: str | None = None) -> None:
         """
         Initialize an image-path serializer.
 
         Args:
             category (str): Data category folder name.
-            prompt_text (Optional[str]): Optional existing image path.
-            extension (Optional[str]): Optional image extension.
+            prompt_text (str | None): Optional existing image path.
+            extension (str | None): Optional image extension.
 
         """
         self.data_type = "image_path"
@@ -641,16 +641,16 @@ class AudioPathDataTypeSerializer(DataTypeSerializer):
         self,
         *,
         category: str,
-        prompt_text: Optional[str] = None,
-        extension: Optional[str] = None,
+        prompt_text: str | None = None,
+        extension: str | None = None,
     ) -> None:
         """
         Initialize an audio-path serializer.
 
         Args:
             category (str): Data category folder name.
-            prompt_text (Optional[str]): Optional existing audio path.
-            extension (Optional[str]): Optional audio extension.
+            prompt_text (str | None): Optional existing audio path.
+            extension (str | None): Optional audio extension.
 
         """
         self.data_type = "audio_path"
@@ -678,16 +678,16 @@ class VideoPathDataTypeSerializer(DataTypeSerializer):
         self,
         *,
         category: str,
-        prompt_text: Optional[str] = None,
-        extension: Optional[str] = None,
+        prompt_text: str | None = None,
+        extension: str | None = None,
     ) -> None:
         """
         Initialize a video-path serializer.
 
         Args:
             category (str): The category or context for the data.
-            prompt_text (Optional[str]): The video path or identifier.
-            extension (Optional[str]): The file extension, defaults to 'mp4'.
+            prompt_text (str | None): The video path or identifier.
+            extension (str | None): The file extension, defaults to 'mp4'.
 
         """
         self.data_type = "video_path"
@@ -715,8 +715,8 @@ class BinaryPathDataTypeSerializer(DataTypeSerializer):
         self,
         *,
         category: str,
-        prompt_text: Optional[str] = None,
-        extension: Optional[str] = None,
+        prompt_text: str | None = None,
+        extension: str | None = None,
     ) -> None:
         """
         Initialize a generic binary-path serializer.
@@ -727,8 +727,8 @@ class BinaryPathDataTypeSerializer(DataTypeSerializer):
 
         Args:
             category (str): The category or context for the data.
-            prompt_text (Optional[str]): The binary file path or identifier.
-            extension (Optional[str]): The file extension, defaults to 'bin'.
+            prompt_text (str | None): The binary file path or identifier.
+            extension (str | None): The file extension, defaults to 'bin'.
 
         """
         self.data_type = "binary_path"

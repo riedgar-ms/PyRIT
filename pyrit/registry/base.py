@@ -4,14 +4,14 @@
 """
 Shared base types for PyRIT registries.
 
-This module contains types shared between class registries (which store Type[T])
+This module contains types shared between class registries (which store type[T])
 and object registries (which store T instances).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Optional, Protocol, TypeVar, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar, runtime_checkable
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -88,8 +88,8 @@ class RegistryProtocol(Protocol[MetadataT]):
     def list_metadata(
         self,
         *,
-        include_filters: Optional[dict[str, Any]] = None,
-        exclude_filters: Optional[dict[str, Any]] = None,
+        include_filters: dict[str, Any] | None = None,
+        exclude_filters: dict[str, Any] | None = None,
     ) -> list[MetadataT]:
         """
         List metadata for all registered items, optionally filtered.
@@ -148,8 +148,8 @@ def _get_metadata_value(metadata: Any, key: str) -> tuple[bool, Any]:
 def _matches_filters(
     metadata: Any,
     *,
-    include_filters: Optional[dict[str, Any]] = None,
-    exclude_filters: Optional[dict[str, Any]] = None,
+    include_filters: dict[str, Any] | None = None,
+    exclude_filters: dict[str, Any] | None = None,
 ) -> bool:
     """
     Check if a metadata object matches all provided filters.
