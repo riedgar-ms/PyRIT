@@ -23,9 +23,9 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast, get_origin
 try:
     # Built-in on Python 3.11+. Fall back to the ``exceptiongroup`` backport on 3.10
     # (declared as a conditional dependency in pyproject.toml).
-    from builtins import ExceptionGroup  # type: ignore[attr-defined]
+    from builtins import ExceptionGroup  # type: ignore[attr-defined,ty:unresolved-import]
 except ImportError:  # pragma: no cover - exercised only on 3.10
-    from exceptiongroup import ExceptionGroup  # type: ignore[no-redef]
+    from exceptiongroup import ExceptionGroup  # type: ignore[no-redef,ty:unresolved-import]
 
 from tqdm.auto import tqdm
 
@@ -38,7 +38,7 @@ from pyrit.executor.attack.single_turn.prompt_sending import PromptSendingAttack
 from pyrit.memory import CentralMemory
 from pyrit.memory.memory_models import ScenarioResultEntry
 from pyrit.models import AttackOutcome, AttackResult, SeedAttackGroup
-from pyrit.models.scenario_result import ScenarioIdentifier, ScenarioResult
+from pyrit.models.scenario_result import ScenarioIdentifier, ScenarioResult, ScenarioRunState
 from pyrit.prompt_target import PromptTarget
 from pyrit.prompt_target.common.target_requirements import TargetRequirements
 from pyrit.registry import ScorerRegistry
@@ -733,7 +733,7 @@ class Scenario(ABC):  # noqa: B024 - retained for subclass type-checking even wi
             objective_scorer_identifier=self._objective_scorer_identifier,
             labels=self._memory_labels,
             attack_results=attack_results,
-            scenario_run_state="CREATED",
+            scenario_run_state=ScenarioRunState.CREATED,
             display_group_map=self._display_group_map,
             metadata=self._build_initial_scenario_metadata(),
         )

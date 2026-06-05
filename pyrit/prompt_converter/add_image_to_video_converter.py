@@ -97,7 +97,7 @@ class AddImageVideoConverter(PromptConverter):
             ValueError: If the image path is invalid or unsupported video format.
         """
         try:
-            import cv2  # noqa: F401
+            import cv2  # type: ignore[ty:unresolved-import]  # noqa: F401
         except ModuleNotFoundError as e:
             logger.error("Could not import opencv. You may need to install it via 'pip install pyrit[opencv]'")
             raise e
@@ -172,7 +172,7 @@ class AddImageVideoConverter(PromptConverter):
             height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             file_extension = video_path.split(".")[-1].lower()
             if file_extension in video_encoding_map:
-                video_char_code = cv2.VideoWriter_fourcc(*video_encoding_map[file_extension])
+                video_char_code = cv2.VideoWriter.fourcc(*video_encoding_map[file_extension])
                 output_video = cv2.VideoWriter(output_path, video_char_code, fps, (width, height))
             else:
                 raise ValueError(f"Unsupported video format: {file_extension}")
