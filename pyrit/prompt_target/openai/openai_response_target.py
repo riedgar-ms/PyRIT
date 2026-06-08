@@ -208,8 +208,8 @@ class OpenAIResponseTarget(OpenAITarget):
     def fresh_instance(
         self,
         *,
-        extra_body_parameters: Optional[dict[str, Any]] = None,
-        grammar_name: Optional[str] = None,
+        extra_body_parameters: dict[str, Any] | None = None,
+        grammar_name: str | None = None,
     ) -> "OpenAIResponseTarget":
         """
         Create a fresh instance of the OpenAIResponseTarget with the same configuration.
