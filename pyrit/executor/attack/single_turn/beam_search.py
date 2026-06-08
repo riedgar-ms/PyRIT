@@ -7,7 +7,7 @@ import logging
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 from pyrit.common.apply_defaults import REQUIRED_VALUE, apply_defaults
 from pyrit.common.utils import warn_if_set
@@ -40,8 +40,8 @@ class Beam:
     id: str
     text: str
     score: float
-    objective_score: Optional[Score] = None
-    response_message: Optional[Message] = None
+    objective_score: Score | None = None
+    response_message: Message | None = None
 
     def get_grammar(self, *, n_chars: int) -> str:
         """
@@ -90,7 +90,7 @@ class BeamReviewer(ABC):
 class TopKBeamReviewer(BeamReviewer):
     """Beam reviewer that retains the top-k beams and modifies them to create new beams."""
 
-    def __init__(self, *, k: int, drop_chars: int, desired_beam_count: Optional[int] = None) -> None:
+    def __init__(self, *, k: int, drop_chars: int, desired_beam_count: int | None = None) -> None:
         """
         Initialize the TopKBeamReviewer.
 
@@ -152,11 +152,11 @@ class BeamSearchAttack(SingleTurnAttackStrategy):
         *,
         objective_target: OpenAIResponseTarget = REQUIRED_VALUE,  # type: ignore[ty:invalid-parameter-default]
         beam_reviewer: BeamReviewer = REQUIRED_VALUE,  # type: ignore[ty:invalid-parameter-default]
-        attack_converter_config: Optional[AttackConverterConfig] = None,
-        attack_scoring_config: Optional[AttackScoringConfig] = None,
-        prompt_normalizer: Optional[PromptNormalizer] = None,
+        attack_converter_config: AttackConverterConfig | None = None,
+        attack_scoring_config: AttackScoringConfig | None = None,
+        prompt_normalizer: PromptNormalizer | None = None,
         params_type: type[AttackParamsT] = AttackParameters,  # type: ignore[ty:invalid-parameter-default]
-        prepended_conversation_config: Optional[PrependedConversationConfig] = None,
+        prepended_conversation_config: PrependedConversationConfig | None = None,
         num_beams: int = 2,
         max_iterations: int = 4,
         num_chars_per_step: int = 100,
@@ -239,7 +239,7 @@ class BeamSearchAttack(SingleTurnAttackStrategy):
 
         # Store the prepended conversation configuration
         self._prepended_conversation_config = prepended_conversation_config
-        self._start_context: Optional[SingleTurnAttackContext[Any]] = None
+        self._start_context: SingleTurnAttackContext[Any] | None = None
 
     def _validate_context(self, *, context: SingleTurnAttackContext[Any]) -> None:
         """
@@ -486,7 +486,7 @@ class BeamSearchAttack(SingleTurnAttackStrategy):
 
         return Message.from_prompt(prompt=context.objective, role="user")
 
-    def _determine_attack_outcome(self, *, beam: Beam) -> tuple[AttackOutcome, Optional[str]]:
+    def _determine_attack_outcome(self, *, beam: Beam) -> tuple[AttackOutcome, str | None]:
         """
         Determine the outcome of the attack based on the response and score.
 
