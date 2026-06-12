@@ -45,7 +45,7 @@ def mock_bad_target():
 def mock_true_false_scorer():
     """Create a mock true/false scorer for testing"""
     scorer = MagicMock(spec=TrueFalseScorer)
-    scorer.score_text_async = AsyncMock()
+    scorer.score_async = AsyncMock()
     scorer.get_identifier.return_value = get_mock_scorer_identifier()
     return scorer
 
@@ -54,7 +54,7 @@ def mock_true_false_scorer():
 def mock_float_scale_scorer():
     """Create a mock float scale scorer for testing"""
     scorer = MagicMock(spec=FloatScaleScorer)
-    scorer.score_text_async = AsyncMock()
+    scorer.score_async = AsyncMock()
     scorer.get_identifier.return_value = get_mock_scorer_identifier()
     return scorer
 
@@ -282,7 +282,6 @@ class TestBeamSearchAttackInit:
 
 @pytest.mark.usefixtures("patch_central_database")
 class TestBeamSearchAttackE2E:
-    @pytest.mark.asyncio
     async def test_e2e_attack(self, mock_target, mock_true_false_scorer, mock_float_scale_scorer):
         """Test a full end-to-end attack execution with mocked components"""
         # Set up the scoring config and attack
