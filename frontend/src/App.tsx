@@ -9,6 +9,7 @@ import AttackNotFound from './components/Chat/AttackNotFound'
 import Home from './components/Home/Home'
 import TargetConfig from './components/Config/TargetConfig'
 import AttackHistory from './components/History/AttackHistory'
+import FeedbackDialog from './components/Feedback/FeedbackDialog'
 import type { HistoryFilters } from './components/History/historyFilters'
 import { ConnectionBanner } from './components/ConnectionBanner'
 import { ErrorBoundary } from './components/ErrorBoundary'
@@ -113,6 +114,11 @@ function App() {
     setSearchParams(filtersToSearchParams(filters), { replace: true })
   }, [setSearchParams])
 
+    /** App version display, attached to feedback context */
+  const [appVersion, setAppVersion] = useState<string>('')
+  /** Whether the feedback dialog is currently open */
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
+
   /** Attack named by the URL, hydrated by the loader effect below. */
   const [loadedAttack, setLoadedAttack] = useState<LoadedAttack | null>(null)
   // When set, the loader skips exactly one fetch for this id — used after
@@ -131,6 +137,9 @@ function App() {
         const data = await versionApi.getVersion()
         if (data.default_labels && Object.keys(data.default_labels).length > 0) {
           defaultLabels = data.default_labels
+        }
+        if (data.display || data.version) {
+          if (!ignore) setAppVersion(data.display ?? data.version ?? '')
         }
       } catch {
         /* version fetch handled elsewhere */
@@ -353,6 +362,7 @@ function App() {
             onNavigate={handleNavigate}
             onToggleTheme={toggleTheme}
             isDarkMode={isDarkMode}
+            onOpenFeedback={() => setFeedbackOpen(true)}
             onStartTour={startTour}
           >
             <Routes>
@@ -402,6 +412,17 @@ function App() {
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </MainLayout>
+          {feedbackOpen && (
+            <FeedbackDialog
+              open={feedbackOpen}
+              onClose={() => setFeedbackOpen(false)}
+              context={{
+                app_version: appVersion || undefined,
+                current_view: currentView,
+                target_type: activeTarget?.target_type,
+              }}
+            />
+          )}
         </FluentProvider>
       </ConnectionHealthProvider>
     </ErrorBoundary>
