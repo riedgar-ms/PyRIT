@@ -7,6 +7,7 @@ import {
   QuestionCircleRegular,
   SettingsRegular,
   HistoryRegular,
+  PersonFeedbackRegular,
   WeatherMoonRegular,
   WeatherSunnyRegular,
 } from '@fluentui/react-icons'
@@ -20,9 +21,10 @@ interface NavigationProps {
   onToggleTheme: () => void
   isDarkMode: boolean
   onStartTour?: () => void
+  onOpenFeedback: () => void
 }
 
-export default function Navigation({ currentView, onNavigate, onToggleTheme, isDarkMode, onStartTour }: NavigationProps) {
+export default function Navigation({ currentView, onNavigate, onToggleTheme, isDarkMode, onStartTour, onOpenFeedback }: NavigationProps) {
   const styles = useNavigationStyles()
 
   return (
@@ -79,6 +81,15 @@ export default function Navigation({ currentView, onNavigate, onToggleTheme, isD
           aria-label="Take a tour"
         />
       )}
+
+      <Button
+        className={styles.navButton}
+        appearance="subtle"
+        icon={<PersonFeedbackRegular />}
+        title="Feedback"
+        aria-label="Feedback"
+        onClick={onOpenFeedback}
+      />
 
       <Button
         className={styles.navButton}

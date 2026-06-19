@@ -14,6 +14,7 @@ interface MainLayoutProps {
   onNavigate: (view: ViewName) => void
   onToggleTheme: () => void
   isDarkMode: boolean
+  onOpenFeedback: () => void
   onStartTour?: () => void
 }
 
@@ -23,6 +24,7 @@ export default function MainLayout({
   onNavigate,
   onToggleTheme,
   isDarkMode,
+  onOpenFeedback,
   onStartTour,
 }: MainLayoutProps) {
   const styles = useMainLayoutStyles()
@@ -59,6 +61,7 @@ export default function MainLayout({
             onNavigate={onNavigate}
             onToggleTheme={onToggleTheme}
             isDarkMode={isDarkMode}
+            onOpenFeedback={onOpenFeedback}
             onStartTour={onStartTour}
           />
         </aside>
