@@ -52,11 +52,11 @@ def reset_technique_registry():
     from pyrit.registry import TargetRegistry
 
     AttackTechniqueRegistry.reset_registry_singleton()
-    TargetRegistry.reset_instance()
+    TargetRegistry.reset_registry_singleton()
     TextAdaptive._cached_strategy_class = None
     yield
     AttackTechniqueRegistry.reset_registry_singleton()
-    TargetRegistry.reset_instance()
+    TargetRegistry.reset_registry_singleton()
     TextAdaptive._cached_strategy_class = None
 
 
