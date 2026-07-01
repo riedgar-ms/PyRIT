@@ -91,6 +91,9 @@ Examples:
   pyrit_scan --list-initializers
   pyrit_scan --list-targets
 
+  # List available datasets
+  pyrit_scan --list-datasets
+
   # Run single-turn cyber attacks against a target
   pyrit_scan airt.cyber --target openai_chat --strategies single_turn
 
@@ -187,6 +190,11 @@ def _build_base_parser(*, add_help: bool = True) -> ArgumentParser:
         "--list-targets",
         action="store_true",
         help="List all available targets and exit",
+    )
+    discovery_group.add_argument(
+        "--list-datasets",
+        action="store_true",
+        help="List all available datasets and exit",
     )
     discovery_group.add_argument(
         "--add-initializer",
@@ -451,6 +459,7 @@ def _is_command_specified(*, parsed_args: Namespace) -> bool:
         parsed_args.list_scenarios
         or parsed_args.list_initializers
         or parsed_args.list_targets
+        or parsed_args.list_datasets
         or parsed_args.add_initializer
         or parsed_args.scenario_name
     )
@@ -513,6 +522,10 @@ async def _handle_list_commands_async(*, client: Any, parsed_args: Namespace) ->
     if parsed_args.list_targets:
         targets = await client.list_targets_async()
         _output.print_target_list(items=targets)
+        return 0
+    if parsed_args.list_datasets:
+        resp = await client.list_datasets_async()
+        _output.print_dataset_list(items=resp.get("items", []))
         return 0
     return None
 

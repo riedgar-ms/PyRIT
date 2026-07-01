@@ -305,6 +305,29 @@ def test_print_target_list_full(capsys):
 
 
 # ---------------------------------------------------------------------------
+# print_dataset_list
+# ---------------------------------------------------------------------------
+
+
+def test_print_dataset_list_empty(capsys):
+    _output.print_dataset_list(items=[])
+    captured = capsys.readouterr()
+    assert "No datasets found" in captured.out
+
+
+def test_print_dataset_list_full(capsys):
+    items = [
+        {"name": "airt_hate"},
+        {"name": "harmbench"},
+    ]
+    _output.print_dataset_list(items=items)
+    captured = capsys.readouterr()
+    assert "airt_hate" in captured.out
+    assert "harmbench" in captured.out
+    assert "Total datasets: 2" in captured.out
+
+
+# ---------------------------------------------------------------------------
 # print_scenario_run_progress
 # ---------------------------------------------------------------------------
 
