@@ -67,6 +67,7 @@ from pyrit.score import (
 
 if TYPE_CHECKING:
     from pyrit.models import ComponentIdentifier
+    from pyrit.prompt_converter import PromptConverter
     from pyrit.scenario.core.attack_technique_factory import AttackTechniqueFactory
 
 logger = logging.getLogger(__name__)
@@ -269,6 +270,9 @@ class Scenario(ABC):  # noqa: B024 - retained for subclass type-checking even wi
 
         # Store prepared strategies for use in _get_atomic_attacks_async
         self._scenario_strategies: list[ScenarioStrategy] = []
+
+        # Maps concrete technique name → extra request converters to append for that technique.
+        self._strategy_converters: dict[str, list[PromptConverter]] = {}
 
         # Maps atomic_attack_name → display_group for user-facing aggregation
         self._display_group_map: dict[str, str] = {}
@@ -564,6 +568,7 @@ class Scenario(ABC):  # noqa: B024 - retained for subclass type-checking even wi
         *,
         objective_target: PromptTarget = REQUIRED_VALUE,  # type: ignore[ty:invalid-parameter-default]
         scenario_strategies: Sequence[ScenarioStrategy] | None = None,
+        strategy_converters: dict[str, list["PromptConverter"]] | None = None,
         dataset_config: DatasetAttackConfiguration | None = None,
         max_concurrency: int = 4,
         max_retries: int = 0,
@@ -586,6 +591,11 @@ class Scenario(ABC):  # noqa: B024 - retained for subclass type-checking even wi
             scenario_strategies (Sequence[ScenarioStrategy] | None): The strategies to execute.
                 Can be a list of ScenarioStrategy enum members. If None, uses the default aggregate
                 from the scenario's configuration.
+            strategy_converters (dict[str, list[PromptConverter]] | None): Optional mapping from
+                concrete technique name (``ScenarioStrategy.value``) to a list of request converters
+                to append on top of that technique's built-in converters. Techniques not present in
+                the mapping are left unchanged. Aggregate strategy names must already be expanded to
+                concrete technique names by the caller.
             dataset_config (DatasetAttackConfiguration | None): Configuration for the dataset source.
                 Use this to specify dataset names or maximum dataset size from the CLI.
                 If not provided, scenarios use their constructor-supplied default_dataset_config.
@@ -656,6 +666,7 @@ class Scenario(ABC):  # noqa: B024 - retained for subclass type-checking even wi
 
         # Prepare scenario strategies using the stored configuration
         self._scenario_strategies = self._prepare_strategies(scenario_strategies)
+        self._strategy_converters = strategy_converters or {}
 
         # Materialize declared defaults for programmatic callers that skip the
         # explicit set_params_from_args step. Frontend-driven flows already
@@ -1101,6 +1112,7 @@ class Scenario(ABC):  # noqa: B024 - retained for subclass type-checking even wi
                 technique_name=combo.technique_name,
                 seed_group_name=combo.dataset_name,
             ),
+            strategy_converters=self._strategy_converters,
             include_baseline=False,
         )
 
