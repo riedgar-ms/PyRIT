@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 
     from pyrit.models import Parameter
     from pyrit.models.identifiers.component_identifier import ComponentIdentifier
-    from pyrit.setup.initializers.pyrit_initializer import PyRITInitializer
+    from pyrit.setup.pyrit_initializer import PyRITInitializer
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +110,7 @@ class InitializerRegistry(Registry["PyRITInitializer", InitializerMetadata]):
             return
 
         # Import base class for discovery
-        from pyrit.setup.initializers.pyrit_initializer import PyRITInitializer
+        from pyrit.setup.pyrit_initializer import PyRITInitializer
 
         if discovery_path.is_file():
             self._process_file(file_path=discovery_path, base_class=PyRITInitializer, builtin=True)
@@ -328,7 +328,7 @@ class InitializerRegistry(Registry["PyRITInitializer", InitializerMetadata]):
             FileNotFoundError: If a script path does not exist.
             ValueError: If a path is not a ``.py`` file or defines no initializer.
         """
-        from pyrit.setup.initializers.pyrit_initializer import PyRITInitializer
+        from pyrit.setup.pyrit_initializer import PyRITInitializer
 
         resolved = self.resolve_script_paths(script_paths=[str(p) for p in script_paths])
 
@@ -398,7 +398,7 @@ class InitializerRegistry(Registry["PyRITInitializer", InitializerMetadata]):
             raise ValueError(f"Initializer '{name}' is already registered. Unregister it first to replace it.")
 
         # Deferred: importing pyrit.setup triggers heavy __init__.py chain
-        from pyrit.setup.initializers.pyrit_initializer import PyRITInitializer
+        from pyrit.setup.pyrit_initializer import PyRITInitializer
 
         # Write to a managed directory so importlib can load it
         managed_dir = self._get_custom_scripts_dir()

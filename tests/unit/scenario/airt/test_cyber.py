@@ -14,7 +14,9 @@ from pyrit.registry.components.attack_technique_registry import AttackTechniqueR
 from pyrit.scenario.core.dataset_configuration import DatasetAttackConfiguration, DatasetConfiguration
 from pyrit.scenario.scenarios.airt.cyber import Cyber
 from pyrit.score import TrueFalseScorer
-from pyrit.setup.initializers.components.scenario_techniques import build_scenario_technique_factories
+from pyrit.setup.initializers.techniques import (
+    build_technique_factories,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -63,7 +65,7 @@ def reset_technique_registry():
     """Reset registries, populate scenario factories, and clear cached strategy class.
 
     Registers a mock adversarial target under ``adversarial_chat`` in
-    ``TargetRegistry`` so ``build_scenario_technique_factories`` can resolve
+    ``TargetRegistry`` so ``build_technique_factories`` can resolve
     it without falling back to ``OpenAIChatTarget`` (which would require
     central memory).
     """
@@ -80,7 +82,7 @@ def reset_technique_registry():
     target_registry.instances.register(adv_target, name="adversarial_chat")
 
     technique_registry = AttackTechniqueRegistry.get_registry_singleton()
-    technique_registry.register_from_factories(build_scenario_technique_factories())
+    technique_registry.register_from_factories(build_technique_factories())
     yield
     AttackTechniqueRegistry.reset_registry_singleton()
     TargetRegistry.reset_registry_singleton()
@@ -361,6 +363,6 @@ class TestCyberRegistryIntegration:
     def test_register_idempotent(self):
         """Registering the scenario technique factories twice doesn't duplicate entries."""
         registry = AttackTechniqueRegistry.get_registry_singleton()
-        registry.register_from_factories(build_scenario_technique_factories())
-        registry.register_from_factories(build_scenario_technique_factories())
+        registry.register_from_factories(build_technique_factories())
+        registry.register_from_factories(build_technique_factories())
         assert len([n for n in registry.instances.get_names() if n == "red_teaming"]) == 1
