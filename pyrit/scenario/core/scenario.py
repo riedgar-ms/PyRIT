@@ -57,6 +57,7 @@ from pyrit.score import (
     SelfAskTrueFalseScorer,
     TrueFalseCompositeScorer,
     TrueFalseInverterScorer,
+    TrueFalseQuestion,
     TrueFalseScoreAggregator,
     TrueFalseScorer,
 )
@@ -399,7 +400,9 @@ class Scenario(ABC):
         composite_scorer_questions_paths = type(self)._get_additional_scoring_questions()
         if composite_scorer_questions_paths:
             path_scorers: list[TrueFalseScorer] = [
-                SelfAskTrueFalseScorer(chat_target=chat_target, true_false_question_path=path)
+                SelfAskTrueFalseScorer.from_question(
+                    chat_target=chat_target, question=TrueFalseQuestion.from_yaml(path)
+                )
                 for path in composite_scorer_questions_paths
             ]
             backstop_scorer = TrueFalseInverterScorer(scorer=SelfAskRefusalScorer(chat_target=chat_target))
