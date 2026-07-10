@@ -386,7 +386,9 @@ class TestBeamSearchAttackTraceability:
         async def capture_send_prompt_async(**kwargs):
             nonlocal captured_context
             captured_context = get_execution_context()
-            return MessagePiece(role="assistant", original_value="response", original_value_data_type="text").to_message()
+            return MessagePiece(
+                role="assistant", original_value="response", original_value_data_type="text"
+            ).to_message()
 
         mock_prompt_normalizer.send_prompt_async.side_effect = capture_send_prompt_async
 
@@ -417,7 +419,9 @@ class TestBeamSearchAttackTraceability:
             num_beams=2,
             max_iterations=2,
         )
-        response = MessagePiece(role="assistant", original_value="response", original_value_data_type="text").to_message()
+        response = MessagePiece(
+            role="assistant", original_value="response", original_value_data_type="text"
+        ).to_message()
 
         async def propagate_beam_async(*, beam):
             beam.text = "response"
