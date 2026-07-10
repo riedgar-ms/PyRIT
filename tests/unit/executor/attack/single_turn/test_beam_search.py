@@ -7,13 +7,17 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from unit.mocks import get_mock_scorer_identifier, get_mock_target_identifier
 
+from pyrit.exceptions import ComponentRole, get_execution_context
 from pyrit.executor.attack import (
+    AttackParameters,
     AttackScoringConfig,
     Beam,
     BeamSearchAttack,
+    SingleTurnAttackContext,
     TopKBeamReviewer,
 )
 from pyrit.models import Message, MessagePiece, Score
+from pyrit.prompt_normalizer import PromptNormalizer
 from pyrit.prompt_target import OpenAIResponseTarget, PromptTarget
 from pyrit.score import FloatScaleScorer, Scorer, TrueFalseScorer
 
@@ -57,6 +61,14 @@ def mock_float_scale_scorer():
     scorer.score_async = AsyncMock()
     scorer.get_identifier.return_value = get_mock_scorer_identifier()
     return scorer
+
+
+@pytest.fixture
+def mock_prompt_normalizer():
+    """Create a mock prompt normalizer for testing"""
+    normalizer = MagicMock(spec=PromptNormalizer)
+    normalizer.send_prompt_async = AsyncMock()
+    return normalizer
 
 
 @pytest.fixture
@@ -349,3 +361,81 @@ class TestBeamSearchAttackE2E:
         # scorers are mocked and returning constants
         # However, with four iterations, there should be at least four of them
         assert attack_result.last_response.original_value.startswith("Simple test runXXXX")
+
+
+@pytest.mark.usefixtures("patch_central_database")
+class TestBeamSearchAttackTraceability:
+    async def test_propagate_beam_applies_labels_and_execution_context(
+        self, mock_target, mock_float_scale_scorer, mock_prompt_normalizer
+    ):
+        scoring_config = AttackScoringConfig(auxiliary_scorers=[mock_float_scale_scorer])
+        attack = BeamSearchAttack(
+            objective_target=mock_target,
+            beam_reviewer=TopKBeamReviewer(k=2, drop_chars=1),
+            attack_scoring_config=scoring_config,
+            prompt_normalizer=mock_prompt_normalizer,
+        )
+        mock_target.fresh_instance.return_value = mock_target
+        context = SingleTurnAttackContext(
+            params=AttackParameters(objective="Test objective", memory_labels={"test": "label"}),
+            conversation_id=str(uuid.uuid4()),
+        )
+        attack._start_context = context
+        captured_context = None
+
+        async def capture_send_prompt_async(**kwargs):
+            nonlocal captured_context
+            captured_context = get_execution_context()
+            return MessagePiece(role="assistant", original_value="response", original_value_data_type="text").to_message()
+
+        mock_prompt_normalizer.send_prompt_async.side_effect = capture_send_prompt_async
+
+        beam = Beam(id=str(uuid.uuid4()), text="prefix", score=0.0)
+        await attack._propagate_beam_async(beam=beam)
+
+        call_args = mock_prompt_normalizer.send_prompt_async.call_args
+        sent_message = call_args.kwargs["message"]
+        assert sent_message.message_pieces[0].labels == {"test": "label"}
+        assert "labels" not in call_args.kwargs
+        assert "attack_identifier" not in call_args.kwargs
+        assert captured_context is not None
+        assert captured_context.component_role == ComponentRole.OBJECTIVE_TARGET
+        assert captured_context.attack_strategy_name == "BeamSearchAttack"
+        assert captured_context.component_identifier == mock_target.get_identifier.return_value
+        assert captured_context.objective_target_conversation_id == call_args.kwargs["conversation_id"]
+        assert captured_context.objective == "Test objective"
+
+    async def test_perform_async_sets_atomic_attack_identifier_and_labels(
+        self, mock_target, mock_float_scale_scorer, mock_prompt_normalizer
+    ):
+        scoring_config = AttackScoringConfig(auxiliary_scorers=[mock_float_scale_scorer])
+        attack = BeamSearchAttack(
+            objective_target=mock_target,
+            beam_reviewer=TopKBeamReviewer(k=2, drop_chars=1),
+            attack_scoring_config=scoring_config,
+            prompt_normalizer=mock_prompt_normalizer,
+            num_beams=2,
+            max_iterations=2,
+        )
+        response = MessagePiece(role="assistant", original_value="response", original_value_data_type="text").to_message()
+
+        async def propagate_beam_async(*, beam):
+            beam.text = "response"
+            beam.response_message = response
+
+        async def score_beam_async(*, beam, context):
+            beam.score = 1.0
+
+        attack._propagate_beam_async = AsyncMock(side_effect=propagate_beam_async)
+        attack._score_beam_async = AsyncMock(side_effect=score_beam_async)
+        context = SingleTurnAttackContext(
+            params=AttackParameters(objective="Test objective", memory_labels={"test": "label"}),
+            conversation_id=str(uuid.uuid4()),
+        )
+
+        result = await attack._perform_async(context=context)
+
+        assert result.atomic_attack_identifier is not None
+        assert result.atomic_attack_identifier.class_name == "AtomicAttack"
+        assert result.get_attack_strategy_identifier() == attack.get_identifier()
+        assert result.labels == {"test": "label"}

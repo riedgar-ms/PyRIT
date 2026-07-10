@@ -11,6 +11,7 @@ from typing import Any, cast
 
 from pyrit.common.apply_defaults import REQUIRED_VALUE, apply_defaults
 from pyrit.common.utils import warn_if_set
+from pyrit.exceptions import ComponentRole, execution_context
 from pyrit.executor.attack.component import ConversationManager, PrependedConversationConfig
 from pyrit.executor.attack.core import AttackConverterConfig, AttackScoringConfig
 from pyrit.executor.attack.core.attack_parameters import AttackParameters, AttackParamsT
@@ -19,6 +20,7 @@ from pyrit.executor.attack.single_turn.single_turn_attack_strategy import (
     SingleTurnAttackStrategy,
 )
 from pyrit.models import (
+    AtomicAttackIdentifier,
     AttackOutcome,
     AttackResult,
     ConversationReference,
@@ -336,7 +338,7 @@ class BeamSearchAttack(SingleTurnAttackStrategy):
         return AttackResult(
             conversation_id=beams[0].id,
             objective=context.objective,
-            atomic_attack_identifier=self.get_identifier(),
+            atomic_attack_identifier=AtomicAttackIdentifier.build(attack_identifier=self.get_identifier()),
             last_response=(
                 beams[0].response_message.message_pieces[0]
                 if beams[0].response_message and beams[0].response_message.message_pieces
@@ -347,6 +349,7 @@ class BeamSearchAttack(SingleTurnAttackStrategy):
             outcome=outcome,
             outcome_reason=outcome_reason,
             executed_turns=1,
+            labels=context.memory_labels,
         )
 
     async def _propagate_beam_async(self, *, beam: Beam) -> None:
@@ -373,13 +376,20 @@ class BeamSearchAttack(SingleTurnAttackStrategy):
                 piece.labels = current_context.memory_labels
 
         try:
-            model_response = await self._prompt_normalizer.send_prompt_async(
-                message=message,
-                target=target,
-                conversation_id=current_context.conversation_id,
-                request_converter_configurations=self._request_converters,
-                response_converter_configurations=self._response_converters,
-            )
+            with execution_context(
+                component_role=ComponentRole.OBJECTIVE_TARGET,
+                attack_strategy_name=self.__class__.__name__,
+                component_identifier=target.get_identifier(),
+                objective_target_conversation_id=current_context.conversation_id,
+                objective=current_context.objective,
+            ):
+                model_response = await self._prompt_normalizer.send_prompt_async(
+                    message=message,
+                    target=target,
+                    conversation_id=current_context.conversation_id,
+                    request_converter_configurations=self._request_converters,
+                    response_converter_configurations=self._response_converters,
+                )
 
             assistant_pieces = [
                 piece
