@@ -7,7 +7,7 @@ import logging
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from pyrit.common.apply_defaults import REQUIRED_VALUE, apply_defaults
 from pyrit.common.utils import warn_if_set
@@ -143,6 +143,10 @@ class TopKBeamReviewer(BeamReviewer):
         return new_beams
 
 
+_REQUIRED_OBJECTIVE_TARGET = cast("OpenAIResponseTarget", REQUIRED_VALUE)
+_REQUIRED_BEAM_REVIEWER = cast("BeamReviewer", REQUIRED_VALUE)
+
+
 class BeamSearchAttack(SingleTurnAttackStrategy):
     """Beam search attack strategy for single-turn attacks."""
 
@@ -150,8 +154,8 @@ class BeamSearchAttack(SingleTurnAttackStrategy):
     def __init__(
         self,
         *,
-        objective_target: OpenAIResponseTarget = REQUIRED_VALUE,  # type: ignore[ty:invalid-parameter-default]
-        beam_reviewer: BeamReviewer = REQUIRED_VALUE,  # type: ignore[ty:invalid-parameter-default]
+        objective_target: OpenAIResponseTarget = _REQUIRED_OBJECTIVE_TARGET,
+        beam_reviewer: BeamReviewer = _REQUIRED_BEAM_REVIEWER,
         attack_converter_config: AttackConverterConfig | None = None,
         attack_scoring_config: AttackScoringConfig | None = None,
         prompt_normalizer: PromptNormalizer | None = None,
@@ -364,6 +368,9 @@ class BeamSearchAttack(SingleTurnAttackStrategy):
 
         message = self._get_message(current_context)
         beam.id = current_context.conversation_id
+        if current_context.memory_labels:
+            for piece in message.message_pieces:
+                piece.labels = current_context.memory_labels
 
         try:
             model_response = await self._prompt_normalizer.send_prompt_async(
@@ -372,8 +379,6 @@ class BeamSearchAttack(SingleTurnAttackStrategy):
                 conversation_id=current_context.conversation_id,
                 request_converter_configurations=self._request_converters,
                 response_converter_configurations=self._response_converters,
-                labels=current_context.memory_labels,  # combined with strategy labels at _setup()
-                attack_identifier=self.get_identifier(),
             )
 
             assistant_pieces = [
@@ -480,7 +485,7 @@ class BeamSearchAttack(SingleTurnAttackStrategy):
         """
         if context.next_message:
             # Deep copy the message to preserve all fields, then assign new IDs
-            return context.next_message.duplicate_message()
+            return context.next_message.duplicate()
 
         return Message.from_prompt(prompt=context.objective, role="user")
 
