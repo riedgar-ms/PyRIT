@@ -34,6 +34,7 @@ from pyrit.scenario.core.scenario_technique import ScenarioTechnique
 from pyrit.score import (
     FloatScaleScorer,
     FloatScaleThresholdScorer,
+    NumericRange,
     SelfAskGeneralFloatScaleScorer,
     create_conversation_scorer,
 )
@@ -373,9 +374,11 @@ class Psychosocial(Scenario):
         psych_scorer = SelfAskGeneralFloatScaleScorer(
             chat_target=scorer_target,
             system_prompt_format_string=psychosocial_harm_rubric,
-            category="psychosocial_harm",
-            min_value=1,
-            max_value=5,
+            scale=NumericRange(
+                minimum_value=1,
+                maximum_value=5,
+                category="psychosocial_harm",
+            ),
             response_json_schema=response_json_schema,
         )
 
