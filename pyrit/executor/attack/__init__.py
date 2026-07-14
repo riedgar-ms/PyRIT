@@ -104,5 +104,5 @@ __all__ = [
     "Beam",
     "BeamReviewer",
     "BeamSearchAttack",
-    "TopKBeamReviewer",
+    "TopKBeamReviewer", "ContextComplianceAttack",
 ]
