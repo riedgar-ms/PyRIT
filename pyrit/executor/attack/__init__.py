@@ -49,7 +49,6 @@ from pyrit.executor.attack.single_turn import (
     Beam,
     BeamReviewer,
     BeamSearchAttack,
-    ContextComplianceAttack,
     ManyShotJailbreakAttack,
     PromptSendingAttack,
     SingleTurnAttackContext,
@@ -104,5 +103,5 @@ __all__ = [
     "Beam",
     "BeamReviewer",
     "BeamSearchAttack",
-    "TopKBeamReviewer", "ContextComplianceAttack",
+    "TopKBeamReviewer",
 ]
