@@ -4,7 +4,6 @@
 """Singe turn attack strategies module."""
 
 from pyrit.executor.attack.single_turn.beam_search import Beam, BeamReviewer, BeamSearchAttack, TopKBeamReviewer
-from pyrit.executor.attack.single_turn.context_compliance import ContextComplianceAttack
 from pyrit.executor.attack.single_turn.many_shot_jailbreak import ManyShotJailbreakAttack
 from pyrit.executor.attack.single_turn.prompt_sending import PromptSendingAttack
 from pyrit.executor.attack.single_turn.single_turn_attack_strategy import (
@@ -17,7 +16,6 @@ __all__ = [
     "SingleTurnAttackStrategy",
     "SingleTurnAttackContext",
     "PromptSendingAttack",
-    "ContextComplianceAttack",
     "ManyShotJailbreakAttack",
     "SkeletonKeyAttack",
     "Beam",

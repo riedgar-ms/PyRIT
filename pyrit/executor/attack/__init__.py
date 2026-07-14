@@ -72,7 +72,6 @@ __all__ = [
     "BargeInAttackContext",
     "ChunkedRequestAttack",
     "ChunkedRequestAttackContext",
-    "ContextComplianceAttack",
     "ConversationManager",
     "ConversationSession",
     "ConversationState",
