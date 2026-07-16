@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal, TypeVar
 from sqlalchemy import MetaData, and_, not_, or_, select
 from sqlalchemy.engine.base import Engine
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from sqlalchemy.orm.attributes import InstrumentedAttribute
+from sqlalchemy.orm.attributes import InstrumentedAttribute, flag_modified
 
 if TYPE_CHECKING:
     from pyrit.memory.memory_embedding import MemoryEmbedding
@@ -53,6 +53,8 @@ from pyrit.models import (
     AttackTechniqueIdentifier,
     ComponentIdentifier,
     Conversation,
+    ConversationRetry,
+    ConversationRetryReason,
     ConversationStats,
     ConverterIdentifier,
     IdentifierFilter,
@@ -520,6 +522,82 @@ class MemoryInterface(abc.ABC):
             except SQLAlchemyError as e:
                 session.rollback()
                 logger.exception(f"Error registering conversation {conversation.conversation_id}: {e}")
+                raise
+
+    def add_conversation_retry(self, *, conversation_id: str, sequence: int, reason: ConversationRetryReason) -> None:
+        """
+        Append a retry record to the conversation-scoped metadata for ``conversation_id``.
+
+        Records that a turn had to be retried (e.g. because its response failed JSON
+        validation and was rolled back out of memory). The conversation's ``Conversations``
+        row is updated in place; if no row exists yet it is created. This is distinct from
+        the insert-only ``_insert_conversation``.
+
+        Args:
+            conversation_id (str): The conversation whose turn was retried.
+            sequence (int): The sequence the retried turn's request occupies.
+            reason (ConversationRetryReason): Why the turn was retried.
+
+        Raises:
+            SQLAlchemyError: If the database update fails; the transaction is rolled back first.
+        """
+        record = ConversationRetry(sequence=sequence, reason=reason).model_dump(mode="json")
+        with closing(self.get_session()) as session:
+            try:
+                entry = session.get(ConversationEntry, str(conversation_id))
+                if entry is None:
+                    entry = ConversationEntry(conversation=Conversation(conversation_id=str(conversation_id)))
+                    session.add(entry)
+                entry.retries = [*(entry.retries or []), record]
+                flag_modified(entry, "retries")
+                session.commit()
+            except SQLAlchemyError as e:
+                session.rollback()
+                logger.exception(f"Error recording retry for conversation {conversation_id}: {e}")
+                raise
+
+    def delete_conversation_pieces_after_sequence(self, *, conversation_id: str, sequence: int) -> int:
+        """
+        Delete all message pieces in a conversation whose sequence is greater than ``sequence``.
+
+        Rolls a conversation back to a baseline so a failed turn can be resent on a clean
+        history. Dependent ``EmbeddingData`` rows for the deleted pieces are removed first to
+        avoid orphaned foreign keys. Pieces at or below ``sequence`` (e.g. the system prompt
+        and any prior good turns) are left intact.
+
+        Args:
+            conversation_id (str): The conversation to roll back.
+            sequence (int): The baseline sequence; pieces with a greater sequence are deleted.
+
+        Returns:
+            int: The number of ``PromptMemoryEntries`` deleted.
+
+        Raises:
+            SQLAlchemyError: If the deletion fails; the transaction is rolled back first.
+        """
+        with closing(self.get_session()) as session:
+            try:
+                pieces = (
+                    session.query(PromptMemoryEntry)
+                    .filter(
+                        PromptMemoryEntry.conversation_id == str(conversation_id),
+                        PromptMemoryEntry.sequence > sequence,
+                    )
+                    .all()
+                )
+                if not pieces:
+                    return 0
+                piece_ids = [piece.id for piece in pieces]
+                session.query(EmbeddingDataEntry).filter(EmbeddingDataEntry.id.in_(piece_ids)).delete(
+                    synchronize_session=False
+                )
+                for piece in pieces:
+                    session.delete(piece)
+                session.commit()
+                return len(pieces)
+            except SQLAlchemyError as e:
+                session.rollback()
+                logger.exception(f"Error deleting conversation pieces for {conversation_id}: {e}")
                 raise
 
     @classmethod
@@ -1211,7 +1289,7 @@ class MemoryInterface(abc.ABC):
         """
         Return sorted unique attack class names from all stored attack results.
 
-        Extracts class_name from the attack_identifier JSON column via a
+        Extracts class_name from the atomic_attack_identifier JSON column via a
         database-level DISTINCT query.
 
         Returns:
@@ -1223,8 +1301,8 @@ class MemoryInterface(abc.ABC):
         """
         Return sorted unique converter class names used across all attack results.
 
-        Extracts class_name values from the request_converter_identifiers array
-        within the attack_identifier JSON column via a database-level query.
+        Extracts class_name values from the nested request_converters array
+        within the atomic_attack_identifier JSON column via a database-level query.
 
         Returns:
             Sorted list of unique converter class name strings.
@@ -1818,21 +1896,6 @@ class MemoryInterface(abc.ABC):
             logger.error(f"Failed to update entries with conversation_id {conversation_id}.")
         return success
 
-    def update_labels_by_conversation_id(self, *, conversation_id: str, labels: dict[str, Any]) -> bool:
-        """
-        Update the labels of prompt entries in memory for a given conversation ID.
-
-        Args:
-            conversation_id (str): The conversation ID of the entries to be updated.
-            labels (dict): New dictionary of labels.
-
-        Returns:
-            bool: True if the update was successful, False otherwise.
-        """
-        return self.update_prompt_entries_by_conversation_id(
-            conversation_id=conversation_id, update_fields={"labels": labels}
-        )
-
     def update_prompt_metadata_by_conversation_id(
         self, *, conversation_id: str, prompt_metadata: dict[str, str | int]
     ) -> bool:
@@ -2368,8 +2431,8 @@ class MemoryInterface(abc.ABC):
             outcome (str | None, optional): The outcome to filter by (success, failure, undetermined).
                 Defaults to None.
             attack_classes (Sequence[str] | None, optional): Filter by exact attack class_name in
-                attack_identifier. Returns attacks matching ANY of the listed class names (OR logic,
-                case-sensitive). An empty sequence applies no filter. Defaults to None.
+                atomic_attack_identifier. Returns attacks matching ANY of the listed class names
+                (OR logic, case-sensitive). An empty sequence applies no filter. Defaults to None.
             atomic_attack_eval_hashes (Sequence[str] | None, optional): Filter by behavioral
                 equivalence hash on ``atomic_attack_identifier.eval_hash`` (auto-stamped on persistence
                 by ``AtomicAttackEvaluationIdentifier``). Returns results matching ANY of the listed
@@ -2577,12 +2640,6 @@ class MemoryInterface(abc.ABC):
         """
         Return all unique label key-value pairs across attack results.
 
-        Labels may live on ``PromptMemoryEntry.labels`` (joined via
-        conversation_id) **or** directly on ``AttackResultEntry.labels``.
-        Both sources are queried (OR logic, mirroring the label filter
-        behaviour in ``get_attack_results``), and unique key-value pairs
-        are aggregated in Python.
-
         Returns:
             dict[str, list[str]]: Mapping of label keys to sorted lists of
             unique values.
@@ -2590,24 +2647,11 @@ class MemoryInterface(abc.ABC):
         label_values: dict[str, set[str]] = {}
 
         with closing(self.get_session()) as session:
-            # Labels from PromptMemoryEntry linked to an attack
-            pme_rows = (
-                session.query(PromptMemoryEntry.labels)
-                .join(
-                    AttackResultEntry,
-                    PromptMemoryEntry.conversation_id == AttackResultEntry.conversation_id,
-                )
-                .filter(PromptMemoryEntry.labels.isnot(None))
-                .distinct()
-                .all()
-            )
-
-            # Labels directly on AttackResultEntry
             are_rows = (
                 session.query(AttackResultEntry.labels).filter(AttackResultEntry.labels.isnot(None)).distinct().all()
             )
 
-        for (labels,) in (*pme_rows, *are_rows):
+        for (labels,) in are_rows:
             if not isinstance(labels, dict):
                 continue
             for key, value in labels.items():
@@ -2659,11 +2703,7 @@ class MemoryInterface(abc.ABC):
         Update the run state of an existing scenario result.
 
         Performs a targeted UPDATE of only the state/error columns instead of
-        rebuilding the entire ``ScenarioResultEntry`` row. The full-row rebuild
-        used to read the stored row, mutate the ScenarioResult, and re-serialize
-        every column — including ``attack_results_json`` which is being phased
-        out and could be stale during the deprecation window. A targeted UPDATE
-        avoids clobbering manifest data and is also cheaper.
+        rebuilding the entire ``ScenarioResultEntry`` row.
 
         Args:
             scenario_result_id (str): The ID of the scenario result to update.
