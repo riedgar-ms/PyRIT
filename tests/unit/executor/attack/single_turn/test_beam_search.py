@@ -396,8 +396,7 @@ class TestBeamSearchAttackTraceability:
         await attack._propagate_beam_async(beam=beam)
 
         call_args = mock_prompt_normalizer.send_prompt_async.call_args
-        sent_message = call_args.kwargs["message"]
-        assert sent_message.message_pieces[0].labels == {"test": "label"}
+        assert attack._start_context.memory_labels == {"test": "label"}
         assert "labels" not in call_args.kwargs
         assert "attack_identifier" not in call_args.kwargs
         assert captured_context is not None
