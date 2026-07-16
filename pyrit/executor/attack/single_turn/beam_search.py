@@ -371,9 +371,6 @@ class BeamSearchAttack(SingleTurnAttackStrategy):
 
         message = self._get_message(current_context)
         beam.id = current_context.conversation_id
-        if current_context.memory_labels:
-            for piece in message.message_pieces:
-                piece.labels = current_context.memory_labels
 
         try:
             with execution_context(
