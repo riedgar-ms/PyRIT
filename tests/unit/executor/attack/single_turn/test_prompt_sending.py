@@ -207,15 +207,16 @@ class TestContextValidation:
 
     def test_validate_context_with_additional_optional_fields(self, mock_target):
         attack = PromptSendingAttack(objective_target=mock_target)
-        context = SingleTurnAttackContext(
-            params=AttackParameters(
-                objective="Test objective",
-                next_message=Message.from_prompt(prompt="test", role="user"),
-            ),
-            conversation_id=str(uuid.uuid4()),
-            system_prompt="System prompt",
-            metadata={"key": "value"},
-        )
+        with pytest.warns(DeprecationWarning, match="system_prompt"):
+            context = SingleTurnAttackContext(
+                params=AttackParameters(
+                    objective="Test objective",
+                    next_message=Message.from_prompt(prompt="test", role="user"),
+                ),
+                conversation_id=str(uuid.uuid4()),
+                system_prompt="System prompt",
+                metadata={"key": "value"},
+            )
 
         attack._validate_context(context=context)  # Should not raise
 
@@ -1035,7 +1036,6 @@ class TestAttackLifecycle:
             prepended_conversation=[sample_response],
             memory_labels={"test": "label"},
             next_message=message,
-            system_prompt="System prompt",
         )
 
         # Verify result
@@ -1049,6 +1049,26 @@ class TestAttackLifecycle:
         assert context.objective == "Test objective"
         assert context.memory_labels == {"test": "label"}
         assert context.next_message is not None
+
+    async def test_execute_async_with_deprecated_system_prompt_warns(self, mock_target, sample_response):
+        """Passing the deprecated system_prompt= still routes to the context field but warns."""
+        attack = PromptSendingAttack(objective_target=mock_target)
+        attack._validate_context = MagicMock()
+        attack._setup_async = AsyncMock()
+        attack._perform_async = AsyncMock(
+            return_value=AttackResult(
+                conversation_id="test-id",
+                objective="Test objective",
+                outcome=AttackOutcome.SUCCESS,
+                last_response=sample_response.get_piece(),
+            )
+        )
+        attack._teardown_async = AsyncMock()
+
+        with pytest.warns(DeprecationWarning, match="system_prompt"):
+            await attack.execute_async(objective="Test objective", system_prompt="System prompt")
+
+        context = attack._validate_context.call_args.kwargs["context"]
         assert context.system_prompt == "System prompt"
 
     async def test_execute_async_with_invalid_params_raises_error(self, mock_target):
