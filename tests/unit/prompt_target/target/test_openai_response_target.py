@@ -689,6 +689,7 @@ def test_set_openai_env_configuration_vars_sets_vars():
 
 def test_fresh_instance_creates_new_target_with_overrides_and_copied_config(patch_central_database):
     extra_body_parameters = {
+        "store": False,
         "metadata": {"source": "original"},
         "tools": [{"type": "custom", "format": {"type": "grammar"}, "name": "old_grammar"}],
     }
@@ -707,7 +708,12 @@ def test_fresh_instance_creates_new_target_with_overrides_and_copied_config(patc
 
     assert fresh_target is not target
     assert isinstance(fresh_target, OpenAIResponseTarget)
-    assert fresh_target._extra_body_parameters == {"metadata": {"source": "fresh"}}
+    # Override keys replace their counterparts; base-only keys (store, tools) are preserved.
+    assert fresh_target._extra_body_parameters == {
+        "store": False,
+        "metadata": {"source": "fresh"},
+        "tools": [{"type": "custom", "format": {"type": "grammar"}, "name": "old_grammar"}],
+    }
     assert fresh_target._grammar_name == "new_grammar"
 
     # Verify mutable state was copied, not shared.

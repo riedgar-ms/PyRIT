@@ -1,13 +1,18 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
+import asyncio
 import uuid
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from unit.mocks import get_mock_scorer_identifier, get_mock_target_identifier
 
-from pyrit.exceptions import ComponentRole, get_execution_context
+from pyrit.exceptions import (
+    ComponentRole,
+    EmptyResponseException,
+    get_execution_context,
+)
 from pyrit.executor.attack import (
     AttackParameters,
     AttackScoringConfig,
@@ -380,7 +385,6 @@ class TestBeamSearchAttackTraceability:
             params=AttackParameters(objective="Test objective", memory_labels={"test": "label"}),
             conversation_id=str(uuid.uuid4()),
         )
-        attack._start_context = context
         captured_context = None
 
         async def capture_send_prompt_async(**kwargs):
@@ -393,10 +397,10 @@ class TestBeamSearchAttackTraceability:
         mock_prompt_normalizer.send_prompt_async.side_effect = capture_send_prompt_async
 
         beam = Beam(id=str(uuid.uuid4()), text="prefix", score=0.0)
-        await attack._propagate_beam_async(beam=beam)
+        await attack._propagate_beam_async(beam=beam, base_context=context)
 
         call_args = mock_prompt_normalizer.send_prompt_async.call_args
-        assert attack._start_context.memory_labels == {"test": "label"}
+        assert context.memory_labels == {"test": "label"}
         assert "labels" not in call_args.kwargs
         assert "attack_identifier" not in call_args.kwargs
         assert captured_context is not None
@@ -422,7 +426,7 @@ class TestBeamSearchAttackTraceability:
             role="assistant", original_value="response", original_value_data_type="text"
         ).to_message()
 
-        async def propagate_beam_async(*, beam):
+        async def propagate_beam_async(*, beam, base_context):
             beam.text = "response"
             beam.response_message = response
 
@@ -442,3 +446,102 @@ class TestBeamSearchAttackTraceability:
         assert result.atomic_attack_identifier.class_name == "AtomicAttack"
         assert result.get_attack_strategy_identifier() == attack.get_identifier()
         assert result.labels == {"test": "label"}
+
+
+@pytest.mark.usefixtures("patch_central_database")
+class TestBeamSearchAttackStateIsolation:
+    def _build_attack(self, mock_target, mock_float_scale_scorer, mock_prompt_normalizer):
+        scoring_config = AttackScoringConfig(auxiliary_scorers=[mock_float_scale_scorer])
+        attack = BeamSearchAttack(
+            objective_target=mock_target,
+            beam_reviewer=TopKBeamReviewer(k=2, drop_chars=1),
+            attack_scoring_config=scoring_config,
+            prompt_normalizer=mock_prompt_normalizer,
+        )
+        mock_target.fresh_instance.return_value = mock_target
+        return attack
+
+    async def test_propagate_beam_uses_base_context_not_shared_state(
+        self, mock_target, mock_float_scale_scorer, mock_prompt_normalizer
+    ):
+        # Two concurrent propagations with distinct base contexts must each attack their own
+        # objective. A shared instance field would let one clobber the other's objective.
+        attack = self._build_attack(mock_target, mock_float_scale_scorer, mock_prompt_normalizer)
+
+        async def send(**kwargs):
+            objective = get_execution_context().objective
+            # Yield control to force interleaving between the two concurrent propagations.
+            await asyncio.sleep(0.01)
+            return MessagePiece(
+                role="assistant", original_value=objective, original_value_data_type="text"
+            ).to_message()
+
+        mock_prompt_normalizer.send_prompt_async.side_effect = send
+
+        context_a = SingleTurnAttackContext(
+            params=AttackParameters(objective="objective-A"), conversation_id=str(uuid.uuid4())
+        )
+        context_b = SingleTurnAttackContext(
+            params=AttackParameters(objective="objective-B"), conversation_id=str(uuid.uuid4())
+        )
+        beam_a = Beam(id="a", text="", score=0.0)
+        beam_b = Beam(id="b", text="", score=0.0)
+
+        await asyncio.gather(
+            attack._propagate_beam_async(beam=beam_a, base_context=context_a),
+            attack._propagate_beam_async(beam=beam_b, base_context=context_b),
+        )
+
+        assert beam_a.text == "objective-A"
+        assert beam_b.text == "objective-B"
+
+    async def test_propagate_beam_clears_stale_state_on_pyrit_exception(
+        self, mock_target, mock_float_scale_scorer, mock_prompt_normalizer
+    ):
+        attack = self._build_attack(mock_target, mock_float_scale_scorer, mock_prompt_normalizer)
+        mock_prompt_normalizer.send_prompt_async.side_effect = EmptyResponseException(message="empty")
+
+        stale_response = MessagePiece(
+            role="assistant", original_value="stale", original_value_data_type="text"
+        ).to_message()
+        stale_score = Score(
+            score_value="0.9",
+            score_value_description="stale",
+            score_type="float_scale",
+            score_category=[],
+            score_rationale="stale",
+            score_metadata={},
+            message_piece_id=str(uuid.uuid4()),
+            scorer_class_identifier=get_mock_scorer_identifier(),
+        )
+        beam = Beam(
+            id=str(uuid.uuid4()),
+            text="prefix",
+            score=0.9,
+            objective_score=stale_score,
+            response_message=stale_response,
+        )
+        context = SingleTurnAttackContext(
+            params=AttackParameters(objective="Test objective"), conversation_id=str(uuid.uuid4())
+        )
+
+        await attack._propagate_beam_async(beam=beam, base_context=context)
+
+        # A failed propagation must not keep a stale response/score that could win or report success.
+        assert beam.response_message is None
+        assert beam.objective_score is None
+        assert beam.score == 0.0
+
+    async def test_propagate_beam_propagates_unexpected_exception(
+        self, mock_target, mock_float_scale_scorer, mock_prompt_normalizer
+    ):
+        attack = self._build_attack(mock_target, mock_float_scale_scorer, mock_prompt_normalizer)
+        mock_prompt_normalizer.send_prompt_async.side_effect = ValueError("unexpected config error")
+
+        beam = Beam(id=str(uuid.uuid4()), text="prefix", score=0.0)
+        context = SingleTurnAttackContext(
+            params=AttackParameters(objective="Test objective"), conversation_id=str(uuid.uuid4())
+        )
+
+        with pytest.raises(ValueError, match="unexpected config error"):
+            await attack._propagate_beam_async(beam=beam, base_context=context)

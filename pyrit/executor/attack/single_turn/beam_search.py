@@ -11,7 +11,7 @@ from typing import Any, cast
 
 from pyrit.common.apply_defaults import REQUIRED_VALUE, apply_defaults
 from pyrit.common.utils import warn_if_set
-from pyrit.exceptions import ComponentRole, execution_context
+from pyrit.exceptions import ComponentRole, PyritException, execution_context
 from pyrit.executor.attack.component import ConversationManager, PrependedConversationConfig
 from pyrit.executor.attack.core import AttackConverterConfig, AttackScoringConfig
 from pyrit.executor.attack.core.attack_parameters import AttackParameters, AttackParamsT
@@ -243,7 +243,6 @@ class BeamSearchAttack(SingleTurnAttackStrategy):
 
         # Store the prepended conversation configuration
         self._prepended_conversation_config = prepended_conversation_config
-        self._start_context: SingleTurnAttackContext[Any] | None = None
 
     def _validate_context(self, *, context: SingleTurnAttackContext[Any]) -> None:
         """
@@ -265,8 +264,6 @@ class BeamSearchAttack(SingleTurnAttackStrategy):
         Args:
             context (SingleTurnAttackContext): The attack context containing attack parameters.
         """
-        self._start_context = copy.deepcopy(context)
-
         # Ensure the context has a conversation ID
         context.conversation_id = str(uuid.uuid4())
 
@@ -293,6 +290,11 @@ class BeamSearchAttack(SingleTurnAttackStrategy):
         # Log the attack configuration
         self._logger.info(f"Starting {self.__class__.__name__} with objective: {context.objective}")
 
+        # Pristine per-execution base that each beam clones. Kept as a local (not on the
+        # strategy instance) so concurrent executions of this reused strategy don't clobber
+        # each other's context.
+        base_context = copy.deepcopy(context)
+
         beams = [Beam(id=context.conversation_id, text="", score=0.0) for _ in range(self._num_beams)]
 
         for step in range(self._max_iterations):
@@ -302,7 +304,7 @@ class BeamSearchAttack(SingleTurnAttackStrategy):
             beams = self._beam_reviewer.review(beams=beams)
 
             # Ideally use a TaskGroup, but that needs Python 3.11+
-            await asyncio.gather(*(self._propagate_beam_async(beam=beam) for beam in beams))
+            await asyncio.gather(*(self._propagate_beam_async(beam=beam, base_context=base_context) for beam in beams))
 
             for i, beam in enumerate(beams):
                 self._logger.debug(f"Beam {i} text after iteration {step}: {beam.text}")
@@ -352,25 +354,29 @@ class BeamSearchAttack(SingleTurnAttackStrategy):
             labels=context.memory_labels,
         )
 
-    async def _propagate_beam_async(self, *, beam: Beam) -> None:
+    async def _propagate_beam_async(self, *, beam: Beam, base_context: SingleTurnAttackContext[Any]) -> None:
         """
         Propagate a single beam by sending a prompt to the target and updating the beam with the response.
 
         Args:
             beam (Beam): The beam to propagate, which will be updated with the response and message.
-
-        Raises:
-            ValueError: If the start context is not set.
+            base_context (SingleTurnAttackContext[Any]): The pristine per-execution context that this
+                beam clones to obtain its own conversation.
         """
-        if self._start_context is None:
-            raise ValueError("Start context must be set before propagating beams")
         target = self._get_target_for_beam(beam)
 
-        current_context = copy.deepcopy(self._start_context)
+        current_context = copy.deepcopy(base_context)
         await self._setup_async(context=current_context)
 
         message = self._get_message(current_context)
         beam.id = current_context.conversation_id
+
+        # Clear per-iteration result state so a failed propagation cannot win or report success
+        # using a stale response from a previous iteration. The accumulated grammar prefix
+        # (beam.text) must persist across iterations, so it is intentionally left untouched.
+        beam.response_message = None
+        beam.objective_score = None
+        beam.score = 0.0
 
         try:
             with execution_context(
@@ -404,8 +410,10 @@ class BeamSearchAttack(SingleTurnAttackStrategy):
                 piece.converted_value for piece in assistant_pieces if isinstance(piece.converted_value, str)
             )
             beam.response_message = model_response
-        except Exception as e:
-            # Just log the error and skip the update
+        except PyritException as e:
+            # Expected model-side failures (empty/blocked/rate-limited responses): log and leave
+            # this beam without a response for the iteration so it is excluded from scoring and
+            # cannot win. Unexpected target/configuration errors are allowed to propagate.
             self._logger.warning(f"Error propagating beam, skipping this update: {e}")
 
     async def _score_beam_async(self, *, beam: Beam, context: SingleTurnAttackContext[Any]) -> None:
