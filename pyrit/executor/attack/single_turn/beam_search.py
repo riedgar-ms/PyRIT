@@ -23,8 +23,10 @@ from pyrit.models import (
     AtomicAttackIdentifier,
     AttackOutcome,
     AttackResult,
+    ComponentIdentifier,
     ConversationReference,
     ConversationType,
+    Identifiable,
     Message,
     Score,
 )
@@ -73,8 +75,17 @@ CONTINUATION: /.{{0,{n_chars}}}/
         return grammar_template.format(prefix=prefix, n_chars=n_chars)
 
 
-class BeamReviewer(ABC):
+class BeamReviewer(Identifiable, ABC):
     """Abstract base class for beam reviewers in beam search attacks."""
+
+    def _build_identifier(self) -> ComponentIdentifier:
+        """
+        Build the behavioral identity for this reviewer.
+
+        Returns:
+            ComponentIdentifier: The reviewer identifier.
+        """
+        return ComponentIdentifier.of(self)
 
     @abstractmethod
     def review(self, *, beams: list[Beam]) -> list[Beam]:
@@ -134,15 +145,32 @@ class TopKBeamReviewer(BeamReviewer):
         sorted_beams = sorted(beams, key=lambda b: b.score, reverse=True)
 
         new_beams = list(sorted_beams[: self.k])
+        retained_beam_count = len(new_beams)
 
         _extra_beam_count = self.desired_beam_count or len(beams)
 
         for i in range(_extra_beam_count - len(new_beams)):
-            nxt = copy.deepcopy(new_beams[i % self.k])
+            nxt = copy.deepcopy(new_beams[i % retained_beam_count])
             if self.drop_chars > 0 and len(nxt.text) > self.drop_chars:
                 nxt.text = nxt.text[: -self.drop_chars]
             new_beams.append(nxt)
         return new_beams
+
+    def _build_identifier(self) -> ComponentIdentifier:
+        """
+        Build the behavioral identity for this reviewer.
+
+        Returns:
+            ComponentIdentifier: The reviewer identifier.
+        """
+        return ComponentIdentifier.of(
+            self,
+            params={
+                "k": self.k,
+                "drop_chars": self.drop_chars,
+                "desired_beam_count": self.desired_beam_count,
+            },
+        )
 
 
 _REQUIRED_OBJECTIVE_TARGET = cast("OpenAIResponseTarget", REQUIRED_VALUE)
@@ -243,6 +271,34 @@ class BeamSearchAttack(SingleTurnAttackStrategy):
 
         # Store the prepended conversation configuration
         self._prepended_conversation_config = prepended_conversation_config
+
+    def get_attack_scoring_config(self) -> AttackScoringConfig | None:
+        """
+        Get the scoring configuration used by this strategy.
+
+        Returns:
+            AttackScoringConfig: The objective and auxiliary scorers used by the attack.
+        """
+        return AttackScoringConfig(
+            objective_scorer=self._objective_scorer,
+            auxiliary_scorers=self._auxiliary_scorers,
+        )
+
+    def _build_identifier(self) -> ComponentIdentifier:
+        """
+        Build the behavioral identity for this beam-search configuration.
+
+        Returns:
+            ComponentIdentifier: The beam-search attack identifier.
+        """
+        return self._create_identifier(
+            params={
+                "num_beams": self._num_beams,
+                "max_iterations": self._max_iterations,
+                "num_chars_per_step": self._num_chars_per_step,
+            },
+            children={"beam_reviewer": self._beam_reviewer.get_identifier()},
+        )
 
     def _validate_context(self, *, context: SingleTurnAttackContext[Any]) -> None:
         """
@@ -407,7 +463,7 @@ class BeamSearchAttack(SingleTurnAttackStrategy):
                     if isinstance(getattr(piece, "converted_value", None), str)
                 ]
             beam.text = "".join(
-                piece.converted_value for piece in assistant_pieces if isinstance(piece.converted_value, str)
+                piece.original_value for piece in assistant_pieces if isinstance(piece.original_value, str)
             )
             beam.response_message = model_response
         except PyritException as e:

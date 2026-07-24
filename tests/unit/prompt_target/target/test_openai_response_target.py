@@ -712,7 +712,7 @@ def test_fresh_instance_creates_new_target_with_overrides_and_copied_config(patc
     assert fresh_target._extra_body_parameters == {
         "store": False,
         "metadata": {"source": "fresh"},
-        "tools": [{"type": "custom", "format": {"type": "grammar"}, "name": "old_grammar"}],
+        "tools": [{"type": "custom", "format": {"type": "grammar"}, "name": "new_grammar"}],
     }
     assert fresh_target._grammar_name == "new_grammar"
 
@@ -724,7 +724,17 @@ def test_fresh_instance_creates_new_target_with_overrides_and_copied_config(patc
     assert fresh_target._extra_body_parameters["metadata"]["source"] == "fresh"
 
 
-@pytest.mark.asyncio
+def test_fresh_instance_grammar_name_requires_one_grammar_tool(patch_central_database):
+    target = OpenAIResponseTarget(
+        model_name="gpt-5",
+        endpoint="https://mock.azure.com/",
+        api_key="mock-api-key",
+    )
+
+    with pytest.raises(ValueError, match="grammar_name override requires exactly one grammar tool"):
+        target.fresh_instance(grammar_name="new_grammar")
+
+
 async def test_build_input_for_multi_modal_async_filters_reasoning(target: OpenAIResponseTarget):
     # Prepare a conversation with a reasoning piece and a text piece
     user_prompt = MessagePiece(

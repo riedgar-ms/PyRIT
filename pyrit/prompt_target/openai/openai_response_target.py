@@ -232,23 +232,35 @@ class OpenAIResponseTarget(OpenAITarget):
         letting the caller override only the keys it specifies.
 
         Args:
-            extra_body_parameters (Optional[dict[str, Any]]): Optional overrides for the
+            extra_body_parameters (dict[str, Any] | None): Optional overrides for the
                 extra body parameters of the new instance. Merged onto the stored values.
-            grammar_name (Optional[str]): Optional override for the grammar name of the
+            grammar_name (str | None): Optional override for the grammar name of the
                 new instance.
 
         Returns:
             OpenAIResponseTarget: A new instance of OpenAIResponseTarget.
+
+        Raises:
+            ValueError: If ``grammar_name`` is provided without exactly one grammar tool.
         """
         init_args: dict[str, Any] = deepcopy(self._init_args)
         if extra_body_parameters is not None:
             merged_body_parameters = deepcopy(init_args.get("extra_body_parameters")) or {}
             merged_body_parameters.update(deepcopy(extra_body_parameters))
             init_args["extra_body_parameters"] = merged_body_parameters
-        result = OpenAIResponseTarget(**init_args)
+
         if grammar_name is not None:
-            result._grammar_name = grammar_name
-        return result
+            body_parameters = init_args.get("extra_body_parameters") or {}
+            grammar_tools = [
+                tool
+                for tool in body_parameters.get("tools", [])
+                if tool.get("type") == "custom" and tool.get("format", {}).get("type") == "grammar"
+            ]
+            if len(grammar_tools) != 1:
+                raise ValueError("grammar_name override requires exactly one grammar tool.")
+            grammar_tools[0]["name"] = grammar_name
+
+        return OpenAIResponseTarget(**init_args)
 
     def _build_identifier(self) -> ComponentIdentifier:
         """

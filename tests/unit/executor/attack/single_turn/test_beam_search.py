@@ -21,7 +21,7 @@ from pyrit.executor.attack import (
     SingleTurnAttackContext,
     TopKBeamReviewer,
 )
-from pyrit.models import Message, MessagePiece, Score
+from pyrit.models import ComponentIdentifier, Message, MessagePiece, Score
 from pyrit.prompt_normalizer import PromptNormalizer
 from pyrit.prompt_target import OpenAIResponseTarget, PromptTarget
 from pyrit.score import FloatScaleScorer, Scorer, TrueFalseScorer
@@ -208,6 +208,17 @@ class TestTopKBeamReviewer:
         assert top_k_beams[3].text == "beam1"
         assert top_k_beams[4].text == "beam1"
 
+    def test_review_k_larger_than_available_beams(self):
+        beams = [
+            Beam(id=str(uuid.uuid4()), text="beam1", score=0.9),
+            Beam(id=str(uuid.uuid4()), text="beam2", score=0.8),
+        ]
+        reviewer = TopKBeamReviewer(k=3, drop_chars=0, desired_beam_count=5)
+
+        reviewed_beams = reviewer.review(beams=beams)
+
+        assert [beam.text for beam in reviewed_beams] == ["beam1", "beam2", "beam1", "beam2", "beam1"]
+
 
 @pytest.mark.usefixtures("patch_central_database")
 class TestBeamSearchAttackInit:
@@ -370,6 +381,70 @@ class TestBeamSearchAttackE2E:
 
 @pytest.mark.usefixtures("patch_central_database")
 class TestBeamSearchAttackTraceability:
+    def test_identifier_includes_scoring_search_parameters_and_reviewer(
+        self, mock_target, mock_true_false_scorer, mock_float_scale_scorer
+    ):
+        scoring_config = AttackScoringConfig(
+            objective_scorer=mock_true_false_scorer,
+            auxiliary_scorers=[mock_float_scale_scorer],
+        )
+        reviewer = TopKBeamReviewer(k=2, drop_chars=3, desired_beam_count=5)
+        attack = BeamSearchAttack(
+            objective_target=mock_target,
+            beam_reviewer=reviewer,
+            attack_scoring_config=scoring_config,
+            num_beams=5,
+            max_iterations=6,
+            num_chars_per_step=7,
+        )
+
+        identifier = attack.get_identifier()
+
+        assert identifier.params == {
+            "num_beams": 5,
+            "max_iterations": 6,
+            "num_chars_per_step": 7,
+        }
+        assert identifier.objective_scorer is not None
+        reviewer_identifier = identifier.get_child("beam_reviewer")
+        assert reviewer_identifier is not None
+        assert reviewer_identifier.params == {
+            "k": 2,
+            "drop_chars": 3,
+            "desired_beam_count": 5,
+        }
+
+    def test_identifier_changes_with_search_or_reviewer_configuration(self, mock_target, mock_float_scale_scorer):
+        objective_scorer = MagicMock(spec=TrueFalseScorer)
+        objective_scorer.get_identifier.return_value = ComponentIdentifier(
+            class_name="ObjectiveScorer",
+            class_module="tests.unit.test_beam_search",
+        )
+        scoring_config = AttackScoringConfig(
+            objective_scorer=objective_scorer,
+            auxiliary_scorers=[mock_float_scale_scorer],
+        )
+
+        baseline = BeamSearchAttack(
+            objective_target=mock_target,
+            beam_reviewer=TopKBeamReviewer(k=2, drop_chars=1),
+            attack_scoring_config=scoring_config,
+        )
+        changed_search = BeamSearchAttack(
+            objective_target=mock_target,
+            beam_reviewer=TopKBeamReviewer(k=2, drop_chars=1),
+            attack_scoring_config=scoring_config,
+            num_beams=3,
+        )
+        changed_reviewer = BeamSearchAttack(
+            objective_target=mock_target,
+            beam_reviewer=TopKBeamReviewer(k=1, drop_chars=1),
+            attack_scoring_config=scoring_config,
+        )
+
+        assert baseline.get_identifier().hash != changed_search.get_identifier().hash
+        assert baseline.get_identifier().hash != changed_reviewer.get_identifier().hash
+
     async def test_propagate_beam_applies_labels_and_execution_context(
         self, mock_target, mock_float_scale_scorer, mock_prompt_normalizer
     ):
@@ -409,6 +484,34 @@ class TestBeamSearchAttackTraceability:
         assert captured_context.component_identifier == mock_target.get_identifier.return_value
         assert captured_context.objective_target_conversation_id == call_args.kwargs["conversation_id"]
         assert captured_context.objective == "Test objective"
+
+    async def test_propagate_beam_uses_original_response_value_for_continuation(
+        self, mock_target, mock_float_scale_scorer, mock_prompt_normalizer
+    ):
+        scoring_config = AttackScoringConfig(auxiliary_scorers=[mock_float_scale_scorer])
+        attack = BeamSearchAttack(
+            objective_target=mock_target,
+            beam_reviewer=TopKBeamReviewer(k=2, drop_chars=1),
+            attack_scoring_config=scoring_config,
+            prompt_normalizer=mock_prompt_normalizer,
+        )
+        mock_target.fresh_instance.return_value = mock_target
+        mock_prompt_normalizer.send_prompt_async.return_value = MessagePiece(
+            role="assistant",
+            original_value="raw response",
+            converted_value="converted response",
+            original_value_data_type="text",
+            converted_value_data_type="text",
+        ).to_message()
+        context = SingleTurnAttackContext(
+            params=AttackParameters(objective="Test objective"),
+            conversation_id=str(uuid.uuid4()),
+        )
+        beam = Beam(id=str(uuid.uuid4()), text="prefix", score=0.0)
+
+        await attack._propagate_beam_async(beam=beam, base_context=context)
+
+        assert beam.text == "raw response"
 
     async def test_perform_async_sets_atomic_attack_identifier_and_labels(
         self, mock_target, mock_float_scale_scorer, mock_prompt_normalizer
